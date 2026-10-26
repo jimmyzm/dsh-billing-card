@@ -1,6 +1,9 @@
 # Publishes the package to npm when a GitHub release is published, so the npm
 # version is provably built from this repository at this tag.
 #
+# The suite runs here as well as in ci.yml: a release must never publish a tree
+# that main's own CI would have rejected, and this job is the only writer.
+#
 # One-time setup on npmjs.com: Package settings → Trusted publishing → add this
 # repository (Jimmyzm/dsh-billing-card) with workflow name `publish.yml`. No
 # token secret is needed; the job authenticates with GitHub's OIDC identity.
@@ -25,6 +28,30 @@ jobs:
         with:
           node-version: 'lts/*'
           registry-url: https://registry.npmjs.org
+
+      # The tag is the only place a version is decided: refuse to publish a tree
+      # whose package.json does not match the release that triggered this run.
+      - name: Check the tag against the version
+        if: github.event_name == 'release'
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME}"
+          if [ "$tag" != "v$version" ] && [ "$tag" != "$version" ]; then
+            echo "::error::release tag '$tag' does not match package.json version '$version'"
+            exit 1
+          fi
+          echo "publishing $version from $tag"
+
+      - name: Syntax check
+        run: node --check index.js && node --check parse.js && node --check client.js
+
+      - name: Test
+        run: npm test
+
+      # Nothing outside the declared runtime surface may ship: docs/, test/,
+      # .agents/ and AGENTS.md are repository-only.
+      - name: Check the tarball contents
+        run: npm publish --dry-run
 
       # Trusted publishing (OIDC) needs npm >= 11.5; the npm bundled with the
       # Node 22 image is older and would fall back to a token.
