@@ -54,9 +54,13 @@ jobs:
         run: npm publish --dry-run
 
       # Trusted publishing (OIDC) needs npm >= 11.5; the npm bundled with the
-      # Node 22 image is older and would fall back to a token.
+      # Node image is older and would fall back to a token. Pinned to the 11
+      # major on purpose: `@latest` moved to a major whose publish path the
+      # trusted-publisher endpoint answers with 404.
       - name: Upgrade npm
-        run: npm install --global npm@latest
+        run: |
+          npm install --global npm@11
+          npm --version
 
       - name: Publish with provenance
         run: npm publish --provenance --access public
