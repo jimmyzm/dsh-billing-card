@@ -86,12 +86,22 @@ function tableRows(table) {
 }
 
 /**
- * A price cell ("4.5元", "0.02 元") as a number.
+ * A price cell ("4.5元", "0.02 元", "$1,000") as a number.
+ *
+ * The text is normalised first so that full-width digits (`０.０２`) read as
+ * ASCII, and digit-group separators are removed so that `1,000` is a thousand
+ * rather than a one. A separator is only removed between digits and only when
+ * it groups exactly three, which leaves a decimal comma alone.
  * @param text - the cell text.
  * @returns the amount, or `null` when the cell carries no number.
  */
 function amountOf(text) {
-  const match = /\d+(?:\.\d+)?/.exec(text);
+  let normalised = text.normalize('NFKC');
+  for (let previous = ''; previous !== normalised; ) {
+    previous = normalised;
+    normalised = normalised.replace(/(\d)[,，](\d{3})(?!\d)/g, '$1$2');
+  }
+  const match = /\d+(?:\.\d+)?/.exec(normalised);
   if (match === null) return null;
   const value = Number(match[0]);
   return Number.isFinite(value) && value >= 0 ? value : null;
