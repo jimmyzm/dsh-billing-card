@@ -98,7 +98,7 @@ A Chinese UI quotes the CNY page, every other language the USD page.
 
 ## Limits
 
-- Prices and holidays are calibrated once per application start; a long-running app keeps what it started with. The open-platform balance is the exception: it refreshes once a minute.
+- Prices and holidays are calibrated once per application start; a long-running app keeps what it started with. The open-platform balance is the exception: the Host re-reads it every 30 seconds and the card re-reads the Host on its own 30-second tick, so a key configured while the app runs shows up without a reload.
 - Without a `DEEPSEEK_API_KEY` the card simply shows the account balance; the tooltip says no key is configured.
 - A DeepSeek model served by a provider other than DeepSeek's own shows no price: the table is DeepSeek's list, and quoting it there would be a made-up number.
 - Nothing is converted between currencies, and the balance keeps its wallet currency.

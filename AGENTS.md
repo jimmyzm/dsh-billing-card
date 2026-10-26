@@ -28,9 +28,10 @@ so a session rooted at the parent folder loads neither.
    zero exactly once; a positive sub-cent total renders 「不足 0.01」/「under 0.01」. Never use
    float addition, never truncate per wallet.
 5. **A list price needs a DeepSeek provider.** The table is DeepSeek's own, so the card quotes
-   a price only while the provider bills at it — `billsAtListPrice` in `client.js` matches any id
-   containing `deepseek` (`deepseek-account`, `deepseek-official`, a directory id such as
-   `llm-deepseek`), and an unknown provider keeps pricing what it knows. A DeepSeek model served
+   a price only while the provider bills at it — `OFFICIAL_PROVIDERS` in `client.js` is the
+   explicit set `deepseek-account`, `deepseek-official`, `deepseek` (compared case-insensitively),
+   and an unknown provider keeps pricing what it knows. Do not widen it to a substring match:
+   a lookalike id such as `llm-deepseek` belongs to somebody else. A DeepSeek model served
    by any other provider shows 「该渠道不走官方价目」/「This provider has no list price」; a model the
    table simply lacks keeps 「官方价目未收录该模型」/「No official price for this model」.
 6. **Fallbacks are per source.** If the USD page fails while the CNY page and the calendar
@@ -86,12 +87,16 @@ so a session rooted at the parent folder loads neither.
 - Keep `README.md` (English, default) and `README.zh-CN.md` in step: same sections, same table
   rows, cross-linked.
 
-## Known limitation to leave alone unless asked
+## Route re-read cadence
 
-The Client reads the Host route at mount and retries it on a bounded budget
-(`DATA_POLL_MS` × `DATA_POLL_LIMIT` while loading, × `DATA_FAIL_LIMIT` while failing), then
-stops. A Host that finishes its fetch after that window is picked up on the next remount, not by
-a slow re-poll. This is deliberate and currently unapproved to change.
+The Client asks the Host route at mount and retries on a bounded budget
+(`DATA_POLL_MS` × `DATA_POLL_LIMIT` while loading, × `DATA_FAIL_LIMIT` while failing). After
+that it re-reads the route on the existing 30 s tick (`api.current.refreshRoute`), because the
+Host re-reads the open-platform balance every 30 s (`BALANCE_REFRESH_MS`): without the re-read a card
+loaded before a key was configured froze on 「未配置 API Key」 forever. A provider switch in the composer also
+refreshes both the account reader and the route at once, so the headline flips immediately. The fast bounded retries are still the
+only defence against a Host that registers its route late — do not turn them into an unbounded
+fast poll.
 
 ## Pointers
 
