@@ -34,6 +34,7 @@ DSH（DeepSeek Harness）侧边栏底部的一张卡片：还剩多少额度、�
 ## 功能
 
 - **余额** —— 充值钱包 + 赠金钱包，精确相加并按「分」截断，每个钱包的明细在悬停提示里。
+- **两个余额，一个主数字** —— DSH 账号余额为 `deepseek-account` 的模型计费，DeepSeek 开放平台余额（API Key）为 `deepseek-official` 提供商计费。主数字随输入框选中的提供商实时切换；账号余额是默认与兜底，没配 Key 时卡片不会变空。
 - **选中模型的单价** —— 输入 / 缓存读取 / 输出，取当前生效的档位；在输入框换模型立即重绘。
 - **计费时段与倒计时** —— 绿色「空闲」/ 黄色「高峰」，旁边是距切换的时间。
 - **假期与调休标记** —— 中文界面下节假日显示为卡片顶部的淡蓝色横条（`国庆节假期中`），调休上班日显示灰色「调休」标签。
@@ -90,13 +91,15 @@ dsh plugin --profile web remove @jimmyzm/dsh-billing-card
 
 | 内容 | 来源 |
 | --- | --- |
-| 余额、模型 | DSH 账号服务；输入框的模型选择 |
+| 账号余额、模型 | DSH 账号服务；输入框的模型选择 |
+| 开放平台余额 | `GET https://api.deepseek.com/user/balance`，用 Models 页保存的 `DEEPSEEK_API_KEY` 凭据授权（启动环境变量作兜底） |
 | 单价 | <https://api-docs.deepseek.com/zh-cn/quick_start/pricing/> 与 <https://api-docs.deepseek.com/quick_start/pricing/> |
 | 节假日 | <https://calendars.icloud.com/holidays/cn_zh.ics> |
 
 ## 已知边界
 
-- 价目与节假日每次应用启动校准一次，长期不重启的应用保留启动时的那份。
+- 价目与节假日每次应用启动校准一次，长期不重启的应用保留启动时的那份；开放平台余额是例外，每分钟刷新一次。
+- 没有配置 `DEEPSEEK_API_KEY` 时卡片只显示账号余额，悬停提示会说明未配置 Key。
 - 币种之间不换算，余额保持钱包自身币种。
 - 卡片需要同源 HTTP 界面（`dsh web`）；没有 Web 服务时用内置副本运行。
 - 实时模型跟随依赖可选的 `uiSession` 与 `modelDirectories` 服务，缺失时按目录默认值标价。

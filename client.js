@@ -55,7 +55,11 @@ window.__ModuleLoader__.load({
       'card.balance.failed': '读取失败',
       'card.balance.signedOut': '未登录',
       'card.balance.tiny': '不足 0.01',
+      'card.title.api': 'DeepSeek API 余额',
       'card.balance.hint': 'DSH 账号余额，每 30 秒刷新',
+      'card.balance.hint.api': 'DeepSeek 开放平台余额（API Key），每分钟刷新',
+      'card.balance.line.api': 'DeepSeek API',
+      'card.balance.api.missing': '未配置 API Key',
       'card.balance.hintBonus': 'DSH 账号余额（充值 + 赠金合计），每 30 秒刷新',
       'card.bonus': '赠送',
       'card.period.idle': '空闲',
@@ -92,7 +96,11 @@ window.__ModuleLoader__.load({
       'card.balance.failed': 'Unavailable',
       'card.balance.signedOut': 'Signed out',
       'card.balance.tiny': 'under 0.01',
+      'card.title.api': 'DeepSeek API balance',
       'card.balance.hint': 'DSH account balance, refreshed every 30 seconds',
+      'card.balance.hint.api': 'DeepSeek platform balance for the API key, refreshed every minute',
+      'card.balance.line.api': 'DeepSeek API',
+      'card.balance.api.missing': 'No API key',
       'card.balance.hintBonus': 'DSH account balance, recharge plus bonus, refreshed every 30 seconds',
       'card.bonus': 'Bonus',
       'card.period.idle': 'Idle',
@@ -598,7 +606,7 @@ window.__ModuleLoader__.load({
       const [account, setAccount] = useState({ kind: 'loading' });
       const [model, setModel] = useState({ kind: 'loading' });
       const [selection, setSelection] = useState(null);
-      const [remote, setRemote] = useState({ status: 'loading', prices: null, holidays: null });
+      const [remote, setRemote] = useState({ status: 'loading', prices: null, holidays: null, deepseek: null });
 
       // Injected readers are re-read every render so the effects below only
       // depend on their own cadence, never on prop identity.
@@ -758,6 +766,12 @@ window.__ModuleLoader__.load({
       // deployment's model, not the one this session has selected.
       const selectedModel =
         selection !== null && typeof selection.model === 'string' && selection.model !== '' ? selection.model : null;
+      const selectedProvider =
+        selection !== null && typeof selection.provider === 'string' && selection.provider !== ''
+          ? selection.provider
+          : null;
+      const activeProvider =
+        selectedProvider !== null ? selectedProvider : model.kind === 'ready' ? model.provider : null;
       const activeId = selectedModel !== null ? selectedModel : model.kind === 'ready' ? model.id : null;
       const activeName =
         activeId === null || model.kind !== 'ready'
@@ -818,9 +832,18 @@ window.__ModuleLoader__.load({
             holidaySource;
 
       // Balance line: an amount when one is readable, otherwise the reason.
+      //
+      // Two accounts pay for models here: the DSH account (which bills the
+      // `deepseek-account` models) and the DeepSeek open platform behind an API
+      // key (which bills the `deepseek-official` provider). The account balance
+      // is the default and the fallback; the API balance takes over only while a
+      // model from the API-key provider is selected.
+      const apiBalance = remote.deepseek;
+      const apiReady = apiBalance !== null && apiBalance !== undefined && apiBalance.status === 'ready';
+      const apiPreferred = activeProvider === 'deepseek-official' && apiReady;
       let balanceMain = null;
       let balanceNote = tr('card.balance.loading');
-      let balanceHint = tr('card.balance.hint');
+      let balanceHint = apiPreferred ? tr('card.balance.hint.api') : tr('card.balance.hint');
       const walletLines = [];
       // A non-Chinese card quotes dollar prices, so its balance carries the ISO
       // code next to the symbol: no reader mistakes `¥` for a rendering bug.
@@ -847,12 +870,42 @@ window.__ModuleLoader__.load({
             // ISO code, set small so the amount stays the loud part.
             balanceMain = { code: code ? total.currency : null, text: symbol + text };
           }
-          balanceHint = tr(total.includesBonus ? 'card.balance.hintBonus' : 'card.balance.hint');
+          // The account hint describes the account amount; while the API balance
+          // leads, its own hint stays.
+          if (!apiPreferred) {
+            balanceHint = tr(total.includesBonus ? 'card.balance.hintBonus' : 'card.balance.hint');
+          }
         }
       } else if (account.kind === 'signedOut') {
         balanceNote = tr('card.balance.signedOut');
       } else if (account.kind === 'failed') {
         balanceNote = tr('card.balance.failed');
+      }
+      if (apiReady) {
+        const symbol = CURRENCY_SYMBOL[apiBalance.currency] || '';
+        const total = formatAmount(apiBalance.total, amount);
+        const granted = formatAmount(apiBalance.granted, amount);
+        const toppedUp = formatAmount(apiBalance.toppedUp, amount);
+        // The split is informational: granted credit plus what was topped up.
+        const split = granted === null || toppedUp === null ? '' : ' (' + granted + ' + ' + toppedUp + ')';
+        walletLines.push(
+          tr('card.balance.line.api') +
+            ': ' +
+            apiBalance.currency +
+            ' ' +
+            symbol +
+            (total === null ? tr('card.balance.tiny') : total) +
+            split,
+        );
+        if (apiPreferred) {
+          if (total === null) {
+            balanceNote = code ? apiBalance.currency + ' ' + tr('card.balance.tiny') : symbol + tr('card.balance.tiny');
+          } else {
+            balanceMain = { code: code ? apiBalance.currency : null, text: symbol + total };
+          }
+        }
+      } else if (apiBalance !== null && apiBalance !== undefined && apiBalance.status === 'unavailable') {
+        walletLines.push(tr('card.balance.line.api') + ': ' + tr('card.balance.api.missing'));
       }
       const balanceTitle = [balanceHint].concat(walletLines).join('\n');
 
@@ -897,7 +950,7 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { className: 'dbc-head' },
-              h('span', { className: 'dbc-title', title: balanceHint }, tr('card.title')),
+              h('span', { className: 'dbc-title', title: balanceHint }, tr(apiPreferred ? 'card.title.api' : 'card.title')),
               balanceMain === null
                 ? h('span', { className: 'dbc-note', title: balanceTitle }, balanceNote)
                 : h(
@@ -1143,19 +1196,44 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The open-platform balance the Host read with the configured API key.
+     * @param value - the payload's `deepseek` member.
+     * @returns `{ status, currency, total, granted, toppedUp }` (amounts are
+     * decimal strings), or `null` when the payload carries nothing usable.
+     */
+    function readDeepseek(value) {
+      if (value === null || typeof value !== 'object') return null;
+      const status = typeof value.status === 'string' ? value.status : 'failed';
+      if (status !== 'ready') return { status: status === 'unavailable' ? 'unavailable' : 'failed' };
+      const amount = (text) => (typeof text === 'string' && /^\d+(?:\.\d+)?$/.test(text) ? text : null);
+      const total = amount(value.total);
+      if (total === null) return { status: 'failed' };
+      return {
+        status: 'ready',
+        currency: value.currency === 'USD' ? 'USD' : 'CNY',
+        total,
+        granted: amount(value.granted) ?? '0',
+        toppedUp: amount(value.toppedUp) ?? '0',
+      };
+    }
+
+    /**
      * Turns the Host route body into the card's remote state.
      * @param payload - the parsed JSON body, or `null` when the route did not answer JSON.
      * @returns `{ status, prices, holidays }`; a `loading` status means "ask again".
      */
     function readRemote(payload) {
-      if (payload === null || typeof payload !== 'object') return { status: 'failed', prices: null, holidays: null };
+      if (payload === null || typeof payload !== 'object') {
+        return { status: 'failed', prices: null, holidays: null, deepseek: null };
+      }
       const prices = readPriceBook(payload.prices);
       const holidays = readHolidays(payload.holidays);
-      if (prices === null && holidays === null) {
+      const deepseek = readDeepseek(payload.deepseek);
+      if (prices === null && holidays === null && deepseek === null) {
         const status = payload.status === 'loading' ? 'loading' : 'failed';
-        return { status, prices: null, holidays: null };
+        return { status, prices: null, holidays: null, deepseek: null };
       }
-      return { status: 'ready', prices, holidays };
+      return { status: 'ready', prices, holidays, deepseek };
     }
     //#endregion
 
