@@ -22,17 +22,11 @@ const upstream = {
   'https://api-docs.deepseek.com/zh-cn/quick_start/pricing/': fixture('zh-pricing.html'),
   'https://api-docs.deepseek.com/quick_start/pricing/': fixture('en-pricing.html'),
   'https://calendars.icloud.com/holidays/cn_zh.ics': fixture('cn_zh.ics'),
-  'https://api.deepseek.com/user/balance': JSON.stringify({
-    is_available: true,
-    balance_infos: [{ currency: 'CNY', total_balance: '110.00', granted_balance: '10.00', topped_up_balance: '100.00' }],
-  }),
 };
 const requested = [];
-const seen = [];
-globalThis.fetch = async (url, init) => {
+globalThis.fetch = async (url) => {
   const body = upstream[String(url)];
   requested.push(String(url));
-  seen.push({ url: String(url), headers: (init === undefined ? {} : init.headers) ?? {} });
   if (body === undefined) throw new Error('unexpected fetch: ' + url);
   return { ok: true, status: 200, text: async () => body };
 };
@@ -166,39 +160,6 @@ check('holiday days reach the client', payload.holidays.days.length > 80, true);
 check('holiday names reach the client', Object.keys(payload.holidays.names).length > 80, true);
 check('make-up days reach the client', payload.holidays.makeup.length > 15, true);
 check('holiday years', payload.holidays.years.join(','), '2023,2024,2025,2026');
-check('no API key means no open-platform balance', payload.sources.deepseek, 'unavailable');
-check('the balance member is still present', payload.deepseek.status, 'unavailable');
-
-// ------------------------------------------------------- with an API key
-process.env.DEEPSEEK_API_KEY = 'sk-test-key';
-const keyed = makeHost(true);
-apply(keyed.ctx);
-let withKey = JSON.parse((await answer(keyed.routes[0], 'GET')).body);
-for (let attempt = 0; attempt < 40 && withKey.status === 'loading'; attempt += 1) {
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  withKey = JSON.parse((await answer(keyed.routes[0], 'GET')).body);
-}
-check('the key unlocks the balance', withKey.sources.deepseek, 'ready');
-check('balance amount', withKey.deepseek.total, '110.00');
-check('balance currency', withKey.deepseek.currency, 'CNY');
-check('balance split', withKey.deepseek.granted + '+' + withKey.deepseek.toppedUp, '10.00+100.00');
-const balanceCall = seen.filter((call) => call.url === 'https://api.deepseek.com/user/balance').pop();
-check('the key travels as a bearer token', balanceCall.headers.authorization, 'Bearer sk-test-key');
-check('the balance request asks for JSON', balanceCall.headers.accept, 'application/json');
-
-// A failing balance endpoint must not take the card down with it.
-upstream['https://api.deepseek.com/user/balance'] = '{not json';
-const broken = makeHost(true);
-apply(broken.ctx);
-let failed = JSON.parse((await answer(broken.routes[0], 'GET')).body);
-for (let attempt = 0; attempt < 40 && failed.status === 'loading'; attempt += 1) {
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  failed = JSON.parse((await answer(broken.routes[0], 'GET')).body);
-}
-check('a broken balance is reported per source', failed.sources.deepseek, 'failed');
-check('and the rest of the payload still loaded', failed.status, 'ready');
-check('the price tables survive it', failed.prices.CNY.models['deepseek-flash'].idle.input, 1);
-delete process.env.DEEPSEEK_API_KEY;
 
 const get = await answer(routes[0], 'GET');
 check('content type', get.headers['content-type'], 'application/json; charset=utf-8');

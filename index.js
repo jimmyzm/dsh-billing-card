@@ -11,10 +11,8 @@
  * route answers from memory, so the GUI never waits for the network.
  */
 import {
-  DEEPSEEK_BALANCE_URL,
   HOLIDAY_URL,
   PRICING_URLS,
-  parseDeepseekBalance,
   parseHolidayCalendar,
   parsePricingHtml,
   toBeijingDate,
@@ -30,10 +28,6 @@ export const DATA_PATH = '/deepseek-billing-card/data';
 const FETCH_TIMEOUT_MS = 8000;
 /** Currencies with an official price table, in the order the card prefers them. */
 const CURRENCIES = ['CNY', 'USD'];
-/** Credential reference the Models page stores the DeepSeek API key under. */
-const API_KEY_REF = 'DEEPSEEK_API_KEY';
-/** The open-platform balance moves slowly; one refresh a minute is plenty. */
-const BALANCE_REFRESH_MS = 60000;
 
 /**
  * Reads one upstream document as text.
@@ -42,10 +36,10 @@ const BALANCE_REFRESH_MS = 60000;
  * @returns the body.
  * @throws when the request fails or answers a non-success status.
  */
-async function readText(url, accept, headers = {}) {
+async function readText(url, accept) {
   const response = await fetch(url, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    headers: { accept, ...headers },
+    headers: { accept },
   });
   if (!response.ok) throw new Error('HTTP ' + String(response.status));
   return response.text();
@@ -95,14 +89,7 @@ export function apply(ctx) {
     status: 'loading',
     prices: { CNY: null, USD: null },
     holidays: null,
-    /** Open-platform balance behind the configured API key, when there is one. */
-    deepseek: null,
-    sources: {
-      'pricing.CNY': 'pending',
-      'pricing.USD': 'pending',
-      calendar: 'pending',
-      deepseek: 'pending',
-    },
+    sources: { 'pricing.CNY': 'pending', 'pricing.USD': 'pending', calendar: 'pending' },
     at: null,
   };
 
@@ -135,63 +122,10 @@ export function apply(ctx) {
     }
   }
 
-  /**
-   * The DeepSeek API key this profile uses for its official provider.
-   *
-   * The credential store is the same one the Models page writes, so a key pasted
-   * into the GUI is picked up here; the launch environment remains the fallback
-   * for deployments without the credential service.
-   * @returns the key, or `undefined` when none is configured.
-   */
-  async function readApiKey() {
-    const credentials = ctx.get('credentials');
-    if (credentials !== undefined && typeof credentials.resolve === 'function') {
-      try {
-        const hit = await credentials.resolve(API_KEY_REF);
-        if (hit !== undefined && typeof hit.value === 'string' && hit.value !== '') return hit.value;
-      } catch {
-        // A broken store is not worth failing the card over; try the environment.
-      }
-    }
-    const ambient = typeof process === 'undefined' ? undefined : process.env[API_KEY_REF];
-    return typeof ambient === 'string' && ambient !== '' ? ambient : undefined;
-  }
-
-  /**
-   * Reads the open-platform balance once.
-   *
-   * A profile without a key is not a failure: the card simply keeps showing the
-   * DSH account balance. A failed request is reported, and the last good amount
-   * stays visible until the balance is unreadable for good.
-   */
-  async function loadDeepseekBalance() {
-    const at = new Date().toISOString();
-    try {
-      const key = await readApiKey();
-      if (key === undefined) {
-        state.deepseek = { status: 'unavailable', at };
-        state.sources.deepseek = 'unavailable';
-        return;
-      }
-      const text = await readText(DEEPSEEK_BALANCE_URL, 'application/json', {
-        authorization: 'Bearer ' + key,
-      });
-      const balance = parseDeepseekBalance(text);
-      if (balance === null) throw new Error('the response carried no usable amount');
-      state.deepseek = { status: 'ready', ...balance, at };
-      state.sources.deepseek = 'ready';
-    } catch (error) {
-      warn(ctx, 'deepseek balance', error);
-      state.deepseek = { status: 'failed', at };
-      state.sources.deepseek = 'failed';
-    }
-  }
-
   async function load() {
     const [tables, holidays] = await Promise.all([
       Promise.all(CURRENCIES.map((currency) => loadPrices(currency))),
       loadHolidays(),
-      loadDeepseekBalance(),
     ]);
     let priced = 0;
     CURRENCIES.forEach((currency, at) => {
@@ -206,21 +140,6 @@ export function apply(ctx) {
   }
 
   void load();
-
-  // The open-platform balance is the one upstream that moves while the app runs,
-  // so it refreshes on a timer; the price tables and the calendar stay a startup
-  // snapshot. A profile without an API key costs nothing here: the read resolves
-  // no key and returns before any request.
-  ctx.effect(() => {
-    if (typeof setInterval !== 'function') return () => {};
-    const timer = setInterval(() => {
-      void loadDeepseekBalance();
-    }, BALANCE_REFRESH_MS);
-    if (timer !== null && typeof timer === 'object' && typeof timer.unref === 'function') timer.unref();
-    return () => {
-      if (typeof clearInterval === 'function') clearInterval(timer);
-    };
-  }, 'deepseek-billing-card: balance refresh');
 
   // A nested injection, not an `inject` on this plugin: the web server may
   // activate after this half, or never exist in a deployment without one, and

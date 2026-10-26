@@ -616,19 +616,11 @@ const usdTable = (idleInput = 0.15) => ({
     },
   },
 });
-const apiBalance = (total = '110.00') => ({
-  status: 'ready',
-  currency: 'CNY',
-  total,
-  granted: '10.00',
-  toppedUp: '100.00',
-});
-const livePayload = ({ prices = { CNY: cnyTable(), USD: usdTable() }, holidays = null, deepseek = null } = {}) => ({
+const livePayload = ({ prices = { CNY: cnyTable(), USD: usdTable() }, holidays = null } = {}) => ({
   status: 'ready',
   prices,
   holidays,
-  deepseek,
-  sources: { 'pricing.CNY': 'ready', 'pricing.USD': 'ready', calendar: 'ready', deepseek: 'ready' },
+  sources: { 'pricing.CNY': 'ready', 'pricing.USD': 'ready', calendar: 'ready' },
 });
 const chipOf = (tree, kind) =>
   findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className.split(' ').includes('dbc-chip-' + kind))[0] ?? null;
@@ -831,66 +823,6 @@ console.log('currency default');
   check('zh sub-cent balance', text(byClass(zh.tree, 'dbc-note')), '¥不足 0.01');
   const en = await mountLocalized('en', { now: IDLE_NOW, balance: tiny, catalog: CATALOG });
   check('en sub-cent balance spells the code', text(byClass(en.tree, 'dbc-note')), 'CNY under 0.01');
-}
-
-console.log('balance follows the provider');
-{
-  const live = liveServices();
-  const data = livePayload({ deepseek: apiBalance() });
-  const { tree, pump } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
-
-  // The account balance is the default, and the API balance only rides along in
-  // the tooltip while an account model is selected.
-  check('the account balance leads by default', text(byClass(tree, 'dbc-balance')), '¥32.50');
-  check('the default title names the account', text(byClass(tree, 'dbc-title')), 'DeepSeek 余额');
-  check(
-    'the tooltip carries the API balance too',
-    byClass(tree, 'dbc-balance').props.title.includes('DeepSeek API: CNY ¥110.00 (10.00 + 100.00)'),
-    true,
-  );
-
-  // Selecting the API-key provider moves the headline to the open-platform balance.
-  live.select('session-1', { provider: 'deepseek-official', model: 'deepseek-chat' });
-  let next = await pump();
-  check('the API provider switches the amount', text(byClass(next, 'dbc-balance')), '¥110.00');
-  check('and the title follows', text(byClass(next, 'dbc-title')), 'DeepSeek API 余额');
-  check(
-    'and the hint says how it refreshes',
-    byClass(next, 'dbc-balance').props.title.split(String.fromCharCode(10))[0],
-    'DeepSeek 开放平台余额（API Key），每分钟刷新',
-  );
-
-  // Switching back is the same, in the other direction.
-  live.select('session-1', { provider: 'qoder', model: 'DeepSeek-Flash' });
-  next = await pump();
-  check('switching back restores the account balance', text(byClass(next, 'dbc-balance')), '¥32.50');
-  check('and the account title', text(byClass(next, 'dbc-title')), 'DeepSeek 余额');
-}
-
-{
-  // No key configured: the card keeps the account balance, and says why.
-  const live = liveServices({ 'session-1': { provider: 'deepseek-official', model: 'deepseek-chat' } });
-  const data = livePayload({ deepseek: { status: 'unavailable' } });
-  const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
-  check('an unavailable API balance falls back', text(byClass(tree, 'dbc-balance')), '¥32.50');
-  check('and the title stays the account one', text(byClass(tree, 'dbc-title')), 'DeepSeek 余额');
-  check('the tooltip explains the missing key', byClass(tree, 'dbc-balance').props.title.includes('未配置 API Key'), true);
-}
-
-{
-  // Outside a Chinese card the API amount carries its ISO code, like every other
-  // balance on the card.
-  const live = liveServices({ 'session-1': { provider: 'deepseek-official', model: 'deepseek-chat' } });
-  const data = livePayload({ deepseek: apiBalance('110.00') });
-  const { tree } = await mountLocalized('en', {
-    now: IDLE_NOW,
-    balance: READY_BALANCE,
-    catalog: CATALOG,
-    services: live.services,
-    data,
-  });
-  check('english spells the API currency code', text(byClass(tree, 'dbc-balance')), 'CNY ¥110.00');
-  check('english title', text(byClass(tree, 'dbc-title')), 'DeepSeek API balance');
 }
 
 console.log('currency per language');

@@ -34,7 +34,6 @@ Prices come from the official DeepSeek documentation, the balance from the DSH a
 ## Features
 
 - **Balance** — recharge plus bonus wallets, summed exactly and truncated to the cent, with the per-wallet detail in the tooltip.
-- **Two balances, one headline** — the DSH account balance bills the `deepseek-account` models, and the DeepSeek open-platform balance behind your API key bills the `deepseek-official` provider. The headline follows whichever provider the composer has selected, in real time; the account balance is the default and the fallback, so the card never goes blank when no key is configured.
 - **Unit prices for the selected model** — input, cache read and output in the tier that is active right now; switching models in the composer repaints them immediately.
 - **Billing period and countdown** — green `空闲` / yellow `高峰`, with the time until the next switch.
 - **Holiday and make-up labels** — in the Chinese UI a holiday becomes a light blue banner at the top of the card (`国庆节假期中`), and a make-up workday gets a gray `调休` chip.
@@ -91,15 +90,13 @@ A Chinese UI quotes the CNY page, every other language the USD page.
 
 | What | Source |
 | --- | --- |
-| Account balance, model | DSH account service; the composer's model selection |
-| Open-platform balance | `GET https://api.deepseek.com/user/balance`, authorised with the `DEEPSEEK_API_KEY` credential the Models page stores (the launch environment is the fallback) |
+| Balance, model | DSH account service; the composer's model selection |
 | Prices | <https://api-docs.deepseek.com/zh-cn/quick_start/pricing/> and <https://api-docs.deepseek.com/quick_start/pricing/> |
 | Holidays | <https://calendars.icloud.com/holidays/cn_zh.ics> |
 
 ## Limits
 
-- Prices and holidays are calibrated once per application start; a long-running app keeps what it started with. The open-platform balance is the exception: it refreshes once a minute.
-- Without a `DEEPSEEK_API_KEY` the card simply shows the account balance; the tooltip says no key is configured.
+- Prices and holidays are calibrated once per application start; a long-running app keeps what it started with.
 - Nothing is converted between currencies, and the balance keeps its wallet currency.
 - The card needs the same-origin HTTP GUI (`dsh web`); without a web server it runs on the built-in copies.
 - Live model following needs the optional `uiSession` and `modelDirectories` services — without them the card prices the catalog default.
