@@ -800,7 +800,10 @@ window.__ModuleLoader__.load({
         return typeof name === 'string' && name !== '' ? name : null;
       };
       const holidayName = chinese ? named(calendar.names, today) : null;
-      const makeupName = chinese ? named(calendar.makeupNames, today) : null;
+      // A hand-edited payload can list one day in both books. The off day wins:
+      // a day that is a holiday cannot also be a day you work to make up for it.
+      const makeupName =
+        !calendar.days.has(today) && chinese ? named(calendar.makeupNames, today) : null;
       const holidayTitle =
         holidayName === null ? undefined : tr('card.holiday.tooltip') + ' · ' + holidayName + ' · ' + holidaySource;
       // The banner reads "国庆节假期中", and joins two occasions with a spaced "&".

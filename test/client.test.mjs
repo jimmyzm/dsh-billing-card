@@ -1089,9 +1089,8 @@ for (const [label, data, expectedPrices = SNAPSHOT_ZH_PEAK] of MALFORMED) {
 }
 
 {
-  // A day in both books is still one day off (the parsers drop the make-up
-  // entry, the client re-validates only the shape), but the client itself does
-  // not dedupe: the overlap renders the banner and the gray chip together.
+  // A hand-edited payload can name one day in both books. The off day wins, so
+  // the banner appears and the gray chip stays away.
   const day = dayOf(2026, 10, 26);
   const { tree } = await mount({
     now: PEAK_NOW,
@@ -1105,7 +1104,7 @@ for (const [label, data, expectedPrices = SNAPSHOT_ZH_PEAK] of MALFORMED) {
   });
   check('an overlapping （休） day is still idle', byClass(tree, 'dbc-chip').props.className, 'dbc-chip dbc-chip-idle');
   check('an overlapping day keeps its banner', text(byClass(tree, 'dbc-holiday')), '国庆节假期中');
-  check('the client keeps the overlapping 调休 chip (observed, not deduped)', text(chipOf(tree, 'makeup')), '调休');
+  check('an overlapping day shows no 调休 chip', chipOf(tree, 'makeup'), null);
 }
 
 console.log('route failures');
