@@ -1,0 +1,5 @@
+# Inserts the card into the sidebar footer row. The patch id is stable so a
+# profile edit (disable, override) survives a version bump.
+- insert:
+    - id: dsh-billing-card
+      name: '@jimmyzm/dsh-billing-card'

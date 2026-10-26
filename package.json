@@ -1,0 +1,59 @@
+{
+  "name": "@jimmyzm/dsh-billing-card",
+  "version": "1.0.0",
+  "description": "DSH sidebar footer card: DeepSeek account balance, the current model's unit prices (CNY for a Chinese UI, USD for every other language), the live peak/idle billing window with a countdown, and Chinese statutory-holiday / make-up-workday labels.",
+  "license": "MIT",
+  "author": "jimmyzm",
+  "type": "module",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek",
+    "billing",
+    "sidebar",
+    "cordis"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jimmyzm/dsh-billing-card.git"
+  },
+  "homepage": "https://github.com/jimmyzm/dsh-billing-card#readme",
+  "bugs": {
+    "url": "https://github.com/jimmyzm/dsh-billing-card/issues"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "parse.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "docs/*.png",
+    "docs/*.svg",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  }
+}
