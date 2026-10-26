@@ -5,7 +5,7 @@
  * Run with `node test/parsers.test.mjs`.
  */
 import fs from 'node:fs';
-import { parseHolidayCalendar, parsePricingHtml, toBeijingDate } from '../parse.js';
+import { parseDeepseekBalance, parseHolidayCalendar, parsePricingHtml, toBeijingDate } from '../parse.js';
 
 let failures = 0;
 function check(label, actual, expected) {
@@ -371,6 +371,21 @@ check('a feed with no marked event is null', parseHolidayCalendar(calendarText([
 function overlappingOrder() {
   return parseHolidayCalendar(calendarText([vevent('元旦（休）', '20260103'), vevent('元旦（休）', '20260101')])).days;
 }
+
+// ------------------------------------------------------- open-platform balance
+const balance = parseDeepseekBalance({
+  is_available: true,
+  balance_infos: [{ currency: 'CNY', total_balance: '110.00', granted_balance: '10.00', topped_up_balance: '100.00' }],
+});
+check('the balance parses', JSON.stringify(balance), '{"available":true,"currency":"CNY","total":"110.00","granted":"10.00","toppedUp":"100.00"}');
+check('it also accepts the raw body', parseDeepseekBalance('{"is_available":false,"balance_infos":[{"currency":"USD","total_balance":"7.50"}]}').total, '7.50');
+check('a USD account keeps USD', parseDeepseekBalance({ balance_infos: [{ currency: 'USD', total_balance: '7.50' }] }).currency, 'USD');
+check('CNY wins when both are listed', parseDeepseekBalance({ balance_infos: [{ currency: 'USD', total_balance: '7.50' }, { currency: 'CNY', total_balance: '50' }] }).currency, 'CNY');
+check('an unusable amount is null', parseDeepseekBalance({ balance_infos: [{ currency: 'CNY', total_balance: 'n/a' }] }), null);
+check('an unknown currency is dropped, not relabelled', parseDeepseekBalance({ balance_infos: [{ currency: 'EUR', total_balance: '5' }] }), null);
+check('an unavailable account still reports its amount', parseDeepseekBalance({ is_available: false, balance_infos: [{ currency: 'CNY', total_balance: '0' }] }).available, false);
+check('an empty body is null', parseDeepseekBalance({}), null);
+check('broken JSON is null', parseDeepseekBalance('not json'), null);
 
 console.log(failures === 0 ? '\nparsers: ALL CHECKS PASSED' : '\nparsers: ' + failures + ' CHECK(S) FAILED');
 process.exitCode = failures === 0 ? 0 : 1;

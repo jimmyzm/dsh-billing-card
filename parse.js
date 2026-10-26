@@ -16,6 +16,11 @@ export const PRICING_URLS = {
   CNY: 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing/',
   USD: 'https://api-docs.deepseek.com/quick_start/pricing/',
 };
+/**
+ * Open-platform balance endpoint. It answers for one API key, and the currency
+ * comes back with the amount rather than being implied by the interface.
+ */
+export const DEEPSEEK_BALANCE_URL = 'https://api.deepseek.com/user/balance';
 /** China mainland holiday calendar; `（休）` marks a day off, `（班）` a make-up workday. */
 export const HOLIDAY_URL = 'https://calendars.icloud.com/holidays/cn_zh.ics';
 
@@ -41,6 +46,60 @@ export function toBeijingDate(instant) {
     String(year) + '-' + (month < 10 ? '0' : '') + month + '-' + (day < 10 ? '0' : '') + day
   );
 }
+
+//#region open-platform balance
+/**
+ * A decimal amount from the balance response, as text.
+ * @returns the trimmed digits, or `null` when the value is not a plain amount.
+ */
+function amountText(value) {
+  const text =
+    typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
+  return /^\d+(?:\.\d+)?$/.test(text) ? text : null;
+}
+
+/**
+ * The balance behind an API key, from `GET /user/balance`.
+ *
+ * The response lists one entry per currency; a Chinese account answers in CNY
+ * and an international one in USD. The card shows a single amount, so it keeps
+ * the first entry it can use, preferring CNY when both are present.
+ * @param text - the response body, as JSON text or already parsed.
+ * @returns `{ available, currency, total, granted, toppedUp }`, or `null` when
+ * the body carries no usable amount.
+ */
+export function parseDeepseekBalance(text) {
+  let payload = text;
+  if (typeof text === 'string') {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      return null;
+    }
+  }
+  if (payload === null || typeof payload !== 'object') return null;
+  const infos = Array.isArray(payload.balance_infos) ? payload.balance_infos : [];
+  const usable = [];
+  for (const entry of infos) {
+    if (entry === null || typeof entry !== 'object') continue;
+    const total = amountText(entry.total_balance);
+    // The platform quotes CNY and USD. Anything else is dropped rather than
+    // relabelled: a wrong currency code is a wrong amount.
+    const currency = entry.currency === 'CNY' || entry.currency === 'USD' ? entry.currency : null;
+    if (total === null || currency === null) continue;
+    usable.push({ currency, total, entry });
+  }
+  if (usable.length === 0) return null;
+  const picked = usable.find((candidate) => candidate.currency === 'CNY') ?? usable[0];
+  return {
+    available: payload.is_available === true,
+    currency: picked.currency,
+    total: picked.total,
+    granted: amountText(picked.entry.granted_balance) ?? '0',
+    toppedUp: amountText(picked.entry.topped_up_balance) ?? '0',
+  };
+}
+//#endregion
 
 //#region pricing table
 /** Entities the documentation page emits. */

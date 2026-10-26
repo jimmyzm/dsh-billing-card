@@ -118,7 +118,7 @@ function makeContext({ balance = undefined, catalog = undefined, services = {}, 
       session: {
         async modelCatalog() {
           return catalog === undefined
-            ? { ok: true, value: { default: { provider: 'qoder', model: 'DeepSeek-Flash' }, routableProviders: [], groups: [] } }
+            ? { ok: true, value: { default: { provider: 'deepseek-account', model: 'DeepSeek-Flash' }, routableProviders: [], groups: [] } }
             : catalog;
         },
       },
@@ -320,7 +320,7 @@ const READY_BALANCE = {
 const CATALOG = {
   ok: true,
   value: {
-    default: { provider: 'qoder', model: 'DeepSeek-Flash' },
+    default: { provider: 'deepseek-account', model: 'DeepSeek-Flash' },
     routableProviders: ['qoder'],
     groups: [{ id: 'qoder', name: 'Qoder', models: [{ id: 'DeepSeek-Flash', name: 'DeepSeek-Flash' }] }],
   },
@@ -414,9 +414,9 @@ for (const [label, balance, expected, expectedTitle] of [
 }
 
 for (const [label, catalog, expectedNote, expectedValues] of [
-  ['unknown-model', { ok: true, value: { default: { provider: 'qoder', model: 'gpt-5' }, groups: [] } }, '官方价目未收录该模型', []],
-  ['alias-model', { ok: true, value: { default: { provider: 'qoder', model: 'deepseek-v4-flash' }, groups: [] } }, null, ['1.00', '0.02', '4.00']],
-  ['v4-pro-by-name', { ok: true, value: { default: { provider: 'qoder', model: 'x' }, groups: [{ models: [{ id: 'x', name: 'DeepSeek-V4-Pro-0813' }] }] } }, '官方价目未收录该模型', []],
+  ['unknown-model', { ok: true, value: { default: { provider: 'deepseek-account', model: 'gpt-5' }, groups: [] } }, '官方价目未收录该模型', []],
+  ['alias-model', { ok: true, value: { default: { provider: 'deepseek-account', model: 'deepseek-v4-flash' }, groups: [] } }, null, ['1.00', '0.02', '4.00']],
+  ['v4-pro-by-name', { ok: true, value: { default: { provider: 'deepseek-account', model: 'x' }, groups: [{ models: [{ id: 'x', name: 'DeepSeek-V4-Pro-0813' }] }] } }, '官方价目未收录该模型', []],
   ['failed-catalog', { ok: false }, '官方价目未收录该模型', []],
 ]) {
   const { tree } = await mount({ now: Date.parse('2026-10-25T16:52:00Z'), catalog });
@@ -476,7 +476,7 @@ console.log('long countdown in english');
 const CATALOG_TWO = {
   ok: true,
   value: {
-    default: { provider: 'qoder', model: 'DeepSeek-Flash' },
+    default: { provider: 'deepseek-account', model: 'DeepSeek-Flash' },
     routableProviders: ['qoder'],
     groups: [
       {
@@ -559,34 +559,34 @@ console.log('live model switching');
   });
   check('unselected session keeps the default', text(byClass(tree, 'dbc-model-name')), 'DeepSeek-Flash');
 
-  live.select('session-1', { provider: 'qoder', model: 'deepseek-v4-pro' });
+  live.select('session-1', { provider: 'deepseek-account', model: 'deepseek-v4-pro' });
   let next = await pump();
   check('switch repaints the model', text(byClass(next, 'dbc-model-name')), 'DeepSeek-V4-Pro-0813');
   check('switch repaints the prices', JSON.stringify(priced(next)), JSON.stringify(['4.50', '0.15', '13.50']));
   check('switch keeps the idle tier', text(byClass(next, 'dbc-tier')), '¥/百万 · 空闲价');
 
   // An alias resolves to the row it bills as.
-  live.select('session-1', { provider: 'qoder', model: 'deepseek-v4-flash' });
+  live.select('session-1', { provider: 'deepseek-account', model: 'deepseek-v4-flash' });
   next = await pump();
   check('alias repaints the prices', JSON.stringify(priced(next)), JSON.stringify(['1.00', '0.02', '4.00']));
   check('alias shows the selected id', text(byClass(next, 'dbc-model-name')), 'deepseek-v4-flash');
 
   // Each session carries its own selection.
-  live.select('session-2', { provider: 'qoder', model: 'deepseek-v4-pro' });
+  live.select('session-2', { provider: 'deepseek-account', model: 'deepseek-v4-pro' });
   live.activate('session-2');
   next = await pump();
   check('session switch follows its own selection', text(byClass(next, 'dbc-model-name')), 'DeepSeek-V4-Pro-0813');
   check('session switch prices', JSON.stringify(priced(next)), JSON.stringify(['4.50', '0.15', '13.50']));
 
   // A model outside the snapshot says so instead of showing stale prices.
-  live.select('session-2', { provider: 'other', model: 'gpt-x' });
+  live.select('session-2', { provider: 'deepseek-account', model: 'gpt-x' });
   next = await pump();
   check('unpriced model note', text(byClass(next, 'dbc-note')), '官方价目未收录该模型');
 }
 
 console.log('selection services appear late');
 {
-  const live = liveServices({ 'session-1': { provider: 'qoder', model: 'deepseek-v4-pro' } });
+  const live = liveServices({ 'session-1': { provider: 'deepseek-account', model: 'deepseek-v4-pro' } });
   const services = {};
   let timers = [];
   const { tree, pump } = await mount({
@@ -643,11 +643,19 @@ const usdTable = (idleInput = 0.15) => ({
     },
   },
 });
-const livePayload = ({ prices = { CNY: cnyTable(), USD: usdTable() }, holidays = null } = {}) => ({
+const apiBalance = (total = '110.00') => ({
+  status: 'ready',
+  currency: 'CNY',
+  total,
+  granted: '10.00',
+  toppedUp: '100.00',
+});
+const livePayload = ({ prices = { CNY: cnyTable(), USD: usdTable() }, holidays = null, deepseek = null } = {}) => ({
   status: 'ready',
   prices,
   holidays,
-  sources: { 'pricing.CNY': 'ready', 'pricing.USD': 'ready', calendar: 'ready' },
+  deepseek,
+  sources: { 'pricing.CNY': 'ready', 'pricing.USD': 'ready', calendar: 'ready', deepseek: 'ready' },
 });
 const chipOf = (tree, kind) =>
   findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className.split(' ').includes('dbc-chip-' + kind))[0] ?? null;
@@ -698,13 +706,13 @@ console.log('startup refresh');
 }
 
 {
-  const aliasCatalog = { ok: true, value: { default: { provider: 'qoder', model: 'deepseek-v4-flash' }, groups: [] } };
+  const aliasCatalog = { ok: true, value: { default: { provider: 'deepseek-account', model: 'deepseek-v4-flash' }, groups: [] } };
   const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: aliasCatalog, data: livePayload({ prices: { CNY: cnyTable(0.5), USD: usdTable() } }) });
   check('alias resolves against the host table', JSON.stringify(priced(tree)), JSON.stringify(['0.50', '0.02', '4.00']));
 }
 
 {
-  const hiddenCatalog = { ok: true, value: { default: { provider: 'qoder', model: 'deepseek-v4-pro' }, groups: [] } };
+  const hiddenCatalog = { ok: true, value: { default: { provider: 'deepseek-account', model: 'deepseek-v4-pro' }, groups: [] } };
   const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: hiddenCatalog, data: livePayload() });
   const notes = findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-note').map(text);
   check('a model the host table dropped is unpriced', notes.includes('官方价目未收录该模型'), true);
@@ -850,6 +858,66 @@ console.log('currency default');
   check('zh sub-cent balance', text(byClass(zh.tree, 'dbc-note')), '¥不足 0.01');
   const en = await mountLocalized('en', { now: IDLE_NOW, balance: tiny, catalog: CATALOG });
   check('en sub-cent balance spells the code', text(byClass(en.tree, 'dbc-note')), 'CNY under 0.01');
+}
+
+console.log('balance follows the provider');
+{
+  const live = liveServices();
+  const data = livePayload({ deepseek: apiBalance() });
+  const { tree, pump } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
+
+  // The account balance is the default, and the API balance only rides along in
+  // the tooltip while an account model is selected.
+  check('the account balance leads by default', text(byClass(tree, 'dbc-balance')), '¥32.50');
+  check('the default title names the account', text(byClass(tree, 'dbc-title')), 'DeepSeek 余额');
+  check(
+    'the tooltip carries the API balance too',
+    byClass(tree, 'dbc-balance').props.title.includes('DeepSeek API: CNY ¥110.00 (10.00 + 100.00)'),
+    true,
+  );
+
+  // Selecting the API-key provider moves the headline to the open-platform balance.
+  live.select('session-1', { provider: 'deepseek-official', model: 'deepseek-chat' });
+  let next = await pump();
+  check('the API provider switches the amount', text(byClass(next, 'dbc-balance')), '¥110.00');
+  check('and the title follows', text(byClass(next, 'dbc-title')), 'DeepSeek API 余额');
+  check(
+    'and the hint says how it refreshes',
+    byClass(next, 'dbc-balance').props.title.split(String.fromCharCode(10))[0],
+    'DeepSeek 开放平台余额（API Key），每分钟刷新',
+  );
+
+  // Switching back is the same, in the other direction.
+  live.select('session-1', { provider: 'deepseek-account', model: 'DeepSeek-Flash' });
+  next = await pump();
+  check('switching back restores the account balance', text(byClass(next, 'dbc-balance')), '¥32.50');
+  check('and the account title', text(byClass(next, 'dbc-title')), 'DeepSeek 余额');
+}
+
+{
+  // No key configured: the card keeps the account balance, and says why.
+  const live = liveServices({ 'session-1': { provider: 'deepseek-official', model: 'deepseek-chat' } });
+  const data = livePayload({ deepseek: { status: 'unavailable' } });
+  const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
+  check('an unavailable API balance falls back', text(byClass(tree, 'dbc-balance')), '¥32.50');
+  check('and the title stays the account one', text(byClass(tree, 'dbc-title')), 'DeepSeek 余额');
+  check('the tooltip explains the missing key', byClass(tree, 'dbc-balance').props.title.includes('未配置 API Key'), true);
+}
+
+{
+  // Outside a Chinese card the API amount carries its ISO code, like every other
+  // balance on the card.
+  const live = liveServices({ 'session-1': { provider: 'deepseek-official', model: 'deepseek-chat' } });
+  const data = livePayload({ deepseek: apiBalance('110.00') });
+  const { tree } = await mountLocalized('en', {
+    now: IDLE_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    services: live.services,
+    data,
+  });
+  check('english spells the API currency code', text(byClass(tree, 'dbc-balance')), 'CNY ¥110.00');
+  check('english title', text(byClass(tree, 'dbc-title')), 'DeepSeek API balance');
 }
 
 console.log('currency per language');

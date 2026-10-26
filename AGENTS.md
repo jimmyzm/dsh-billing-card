@@ -1,8 +1,8 @@
 # AGENTS.md — @jimmyzm/dsh-billing-card
 
 DSH (DeepSeek Harness) sidebar plugin: a card in the sidebar footer showing the DeepSeek
-account balance, the current model's unit prices, and the live peak/idle billing window with a
-countdown. No build step, no runtime dependencies, no bundler — three plain ES modules.
+account balance (or the open-platform balance behind your API key), the current model's unit
+prices, and the live peak/idle billing window with a countdown. No build step, no runtime dependencies, no bundler — three plain ES modules.
 
 Start here. Open the session with the repository root as the working directory: DSH discovers
 `AGENTS.md` and `.agents/skills/` by walking up from the session `cwd` to the nearest `.git`,
