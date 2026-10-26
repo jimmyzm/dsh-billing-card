@@ -26,5 +26,10 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      # Trusted publishing (OIDC) needs npm >= 11.5; the npm bundled with the
+      # Node 22 image is older and would fall back to a token.
+      - name: Upgrade npm
+        run: npm install --global npm@latest
+
       - name: Publish with provenance
         run: npm publish --provenance --access public
