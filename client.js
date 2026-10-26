@@ -38,8 +38,19 @@ window.__ModuleLoader__.load({
     const CLOCK_TICK_MS = 1000;
     /** Host route carrying the price tables and holiday calendar of this start. */
     const DATA_ENDPOINT = '/deepseek-billing-card/data';
-    /** The two providers that bill at DeepSeek's own list price. */
-    const OFFICIAL_PROVIDERS = new Set(['deepseek-account', 'deepseek-official']);
+    /**
+     * Whether a provider bills at DeepSeek's own list price.
+     *
+     * Matched by substring on purpose: DSH's built-in DeepSeek providers are
+     * `deepseek-account` and `deepseek-official`, but the same billing also
+     * arrives under a directory id such as `llm-deepseek`, and an exact list
+     * silently treated those as someone else's provider.
+     * @param provider - the composer's provider id, or `null` when unknown.
+     * @returns `true` when the price table applies.
+     */
+    function billsAtListPrice(provider) {
+      return provider === null || (typeof provider === 'string' && provider.toLowerCase().includes('deepseek'));
+    }
     /** While the Host half is still fetching, the card asks again on this cadence. */
     const DATA_POLL_MS = 3000;
     /** Bounded so a Host that is still fetching stops being asked. */
@@ -786,11 +797,10 @@ window.__ModuleLoader__.load({
               ? model.name
               : null;
 
-      // The price table is DeepSeek's own list. Only the two DeepSeek providers
-      // (the account and the open-platform key) bill at it; a DeepSeek model
-      // served by any other provider is billed by that provider, so quoting a
-      // list price there would be an invented number.
-      const official = activeProvider === null || OFFICIAL_PROVIDERS.has(activeProvider);
+      // The price table is DeepSeek's own list. A DeepSeek model served by any
+      // other provider is billed by that provider, so quoting a list price there
+      // would be an invented number.
+      const official = billsAtListPrice(activeProvider);
       const priced = useMemo(() => {
         if (activeId === null) return null;
         const found = lookupPrice([activeId, activeName], rates);
@@ -1007,7 +1017,11 @@ window.__ModuleLoader__.load({
               h('span', { className: 'dbc-tier', title: unitTitle }, unit),
             ),
             priceValues === null
-              ? h('div', { className: 'dbc-note', title: unitTitle }, tr(official ? 'card.price.unknown' : 'card.price.otherProvider'))
+              ? h(
+                  'div',
+                  { className: 'dbc-note', title: unitTitle },
+                  tr(official || priced === null || priced.entry === null ? 'card.price.unknown' : 'card.price.otherProvider'),
+                )
               : h(
                   'div',
                   { className: 'dbc-prices', title: unitTitle },

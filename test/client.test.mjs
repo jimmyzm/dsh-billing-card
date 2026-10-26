@@ -610,6 +610,27 @@ console.log('prices need a DeepSeek provider');
 
   const { tree: english } = await mountLocalized('en', { now: IDLE_NOW, balance: READY_BALANCE, catalog: routed });
   check('the explanation is translated', text(byClass(english, 'dbc-note')), 'This provider has no list price');
+
+  // A model the table never lists stays "not in the price list", whatever the
+  // provider is: the card must not blame the provider for a model it cannot
+  // price anyway.
+  const foreignUnpriced = {
+    ok: true,
+    value: { default: { provider: 'some-router', model: 'gpt-5' }, groups: [] },
+  };
+  const { tree: missing } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: foreignUnpriced });
+  check('a foreign provider still says "not in the list" for a foreign model', text(byClass(missing, 'dbc-note')), '官方价目未收录该模型');
+
+  // DSH ships the DeepSeek providers under more than one id shape; the billing
+  // is DeepSeek's in all of them.
+  for (const provider of ['deepseek-official', 'deepseek-account', 'llm-deepseek', 'DeepSeek-Official']) {
+    const catalog = {
+      ok: true,
+      value: { default: { provider, model: 'deepseek-v4-pro' }, groups: [] },
+    };
+    const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog });
+    check(provider + ' prices at list', JSON.stringify(priced(tree)), JSON.stringify(['4.50', '0.15', '13.50']));
+  }
 }
 
 console.log('selection services appear late');
