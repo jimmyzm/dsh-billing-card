@@ -86,6 +86,8 @@ so a session rooted at the parent folder loads neither.
 - Undo a pushed commit with `git revert`, never with a force-push.
 - Keep `README.md` (English, default) and `README.zh-CN.md` in step: same sections, same table
   rows, cross-linked.
+- Release notes are English, with one emoji per section: `## ✨ New`, `## 🐛 Fixed`,
+  `## 📦 Package`. They mirror the commits of that tag and never mix in Chinese prose.
 
 ## Route re-read cadence
 
