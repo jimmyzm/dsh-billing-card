@@ -33,7 +33,7 @@ const CURRENCIES = ['CNY', 'USD'];
 /** Credential reference the Models page stores the DeepSeek API key under. */
 const API_KEY_REF = 'DEEPSEEK_API_KEY';
 /** The open-platform balance moves slowly; one refresh a minute is plenty. */
-const BALANCE_REFRESH_MS = 60000;
+const BALANCE_REFRESH_MS = 30000;
 
 /**
  * Reads one upstream document as text.

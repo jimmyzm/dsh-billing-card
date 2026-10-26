@@ -152,7 +152,7 @@ async function mount({ now, balance, catalog, services = liveServices().services
       : async () => {
           if (route === 'http-404') return { ok: false, status: 404, json: async () => null };
           if (data === null) throw new Error('no route');
-          return { ok: true, json: async () => data };
+          return { ok: true, json: async () => (typeof data === 'function' ? data() : data) };
         };
   globalThis.setTimeout = (fn, delay, ...rest) => {
     delays.push(delay);
@@ -195,9 +195,13 @@ async function mount({ now, balance, catalog, services = liveServices().services
       return tree;
     };
     const tree = await pump();
-    globalThis.fetch = realFetch;
     globalThis.setTimeout = realSetTimeout;
-    return { tree, registered, props: allProps, pump, delays };
+    // `fetch` stays stubbed: a card that keeps re-reading its route (the 30 s
+    // tick) would otherwise hit the real global once the mount returned.
+    const dispose = () => {
+      globalThis.fetch = realFetch;
+    };
+    return { tree, registered, props: allProps, pump, delays, dispose };
   }
 }
 
@@ -621,9 +625,13 @@ console.log('prices need a DeepSeek provider');
   const { tree: missing } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: foreignUnpriced });
   check('a foreign provider still says "not in the list" for a foreign model', text(byClass(missing, 'dbc-note')), '官方价目未收录该模型');
 
-  // DSH ships the DeepSeek providers under more than one id shape; the billing
-  // is DeepSeek's in all of them.
-  for (const provider of ['deepseek-official', 'deepseek-account', 'llm-deepseek', 'DeepSeek-Official']) {
+  // A lookalike id is not DeepSeek's provider: the set is explicit.
+  const lookalike = { ok: true, value: { default: { provider: 'llm-deepseek', model: 'deepseek-v4-pro' }, groups: [] } };
+  const { tree: alias } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: lookalike });
+  check('a lookalike provider id stays foreign', priced(alias).length, 0);
+
+  // Every id in the official set prices at list; anything else does not.
+  for (const provider of ['deepseek', 'deepseek-official', 'deepseek-account', 'DeepSeek-Official']) {
     const catalog = {
       ok: true,
       value: { default: { provider, model: 'deepseek-v4-pro' }, groups: [] },
@@ -933,7 +941,7 @@ console.log('balance follows the provider');
   check(
     'and the hint says how it refreshes',
     byClass(next, 'dbc-balance').props.title.split(String.fromCharCode(10))[0],
-    'DeepSeek 开放平台余额（API Key），每分钟刷新',
+    'DeepSeek 开放平台余额（API Key），每 30 秒刷新',
   );
 
   // Switching back is the same, in the other direction.
@@ -944,6 +952,26 @@ console.log('balance follows the provider');
 }
 
 {
+  // Switching the provider refreshes the balance immediately: waiting for the
+  // 30 s tick would show the wrong headline for half a minute.
+  const live = liveServices();
+  let ready = false;
+  const { tree, pump } = await mount({
+    now: IDLE_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    services: live.services,
+    data: () => livePayload({ deepseek: ready ? apiBalance() : { status: 'unavailable' } }),
+  });
+  check('the account balance leads before the switch', text(byClass(tree, 'dbc-balance')), '¥32.50');
+
+  ready = true;
+  live.select('session-1', { provider: 'deepseek-official', model: 'deepseek-chat' });
+  const next = await pump();
+  check('the switch fetches the balance without waiting for a tick', text(byClass(next, 'dbc-balance')), '¥110.00');
+}
+
+{
   // No key configured: the card keeps the account balance, and says why.
   const live = liveServices({ 'session-1': { provider: 'deepseek-official', model: 'deepseek-chat' } });
   const data = livePayload({ deepseek: { status: 'unavailable' } });
@@ -951,6 +979,30 @@ console.log('balance follows the provider');
   check('an unavailable API balance falls back', text(byClass(tree, 'dbc-balance')), '¥32.50');
   check('and the title stays the account one', text(byClass(tree, 'dbc-title')), 'DeepSeek 余额');
   check('the tooltip explains the missing key', byClass(tree, 'dbc-balance').props.title.includes('未配置 API Key'), true);
+}
+
+{
+  // The Host re-reads the balance once a minute; the card must re-ask too, or it
+  // stays on whatever the first answer said — including "no API key" from
+  // before the key was configured.
+  const live = liveServices({ 'session-1': { provider: 'deepseek-official', model: 'deepseek-chat' } });
+  let ready = false;
+  const { tree, pump, registered } = await mount({
+    now: IDLE_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    services: live.services,
+    data: () => livePayload({ deepseek: ready ? apiBalance() : { status: 'unavailable' } }),
+  });
+  check('the first answer has no key', byClass(tree, 'dbc-balance').props.title.includes('未配置 API Key'), true);
+
+  ready = true;
+  const tick = registered.timers.find((entry) => entry.delay === 30000);
+  check('the card ticks every 30 s', typeof tick, 'object');
+  tick.callback();
+  const next = await pump();
+  check('the next tick picks the balance up', text(byClass(next, 'dbc-balance')), '¥110.00');
+  check('and drops the missing-key line', byClass(next, 'dbc-balance').props.title.includes('未配置 API Key'), false);
 }
 
 {

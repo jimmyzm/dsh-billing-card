@@ -38,18 +38,15 @@ window.__ModuleLoader__.load({
     const CLOCK_TICK_MS = 1000;
     /** Host route carrying the price tables and holiday calendar of this start. */
     const DATA_ENDPOINT = '/deepseek-billing-card/data';
+    /** The providers that bill at DeepSeek's own list price. */
+    const OFFICIAL_PROVIDERS = new Set(['deepseek-account', 'deepseek-official', 'deepseek']);
     /**
      * Whether a provider bills at DeepSeek's own list price.
-     *
-     * Matched by substring on purpose: DSH's built-in DeepSeek providers are
-     * `deepseek-account` and `deepseek-official`, but the same billing also
-     * arrives under a directory id such as `llm-deepseek`, and an exact list
-     * silently treated those as someone else's provider.
      * @param provider - the composer's provider id, or `null` when unknown.
      * @returns `true` when the price table applies.
      */
     function billsAtListPrice(provider) {
-      return provider === null || (typeof provider === 'string' && provider.toLowerCase().includes('deepseek'));
+      return provider === null || (typeof provider === 'string' && OFFICIAL_PROVIDERS.has(provider.toLowerCase()));
     }
     /** While the Host half is still fetching, the card asks again on this cadence. */
     const DATA_POLL_MS = 3000;
@@ -70,7 +67,7 @@ window.__ModuleLoader__.load({
       'card.balance.tiny': '不足 0.01',
       'card.title.api': 'DeepSeek API 余额',
       'card.balance.hint': 'DSH 账号余额，每 30 秒刷新',
-      'card.balance.hint.api': 'DeepSeek 开放平台余额（API Key），每分钟刷新',
+      'card.balance.hint.api': 'DeepSeek 开放平台余额（API Key），每 30 秒刷新',
       'card.balance.line.api': 'DeepSeek API',
       'card.balance.api.missing': '未配置 API Key',
       'card.balance.hintBonus': 'DSH 账号余额（充值 + 赠金合计），每 30 秒刷新',
@@ -112,7 +109,7 @@ window.__ModuleLoader__.load({
       'card.balance.tiny': 'under 0.01',
       'card.title.api': 'DeepSeek API balance',
       'card.balance.hint': 'DSH account balance, refreshed every 30 seconds',
-      'card.balance.hint.api': 'DeepSeek platform balance for the API key, refreshed every minute',
+      'card.balance.hint.api': 'DeepSeek platform balance for the API key, refreshed every 30 s',
       'card.balance.line.api': 'DeepSeek API',
       'card.balance.api.missing': 'No API key',
       'card.balance.hintBonus': 'DSH account balance, recharge plus bonus, refreshed every 30 seconds',
@@ -638,11 +635,24 @@ window.__ModuleLoader__.load({
 
       // The visible session's model selection, followed live: switching the
       // model in the composer repaints the price line before the next poll.
+      // A provider switch changes which balance pays for the session, so the
+      // account reader and the Host route are both asked again right away —
+      // waiting for the 30 s tick would show the wrong headline for half a minute.
       useEffect(() => {
         if (!wide) return undefined;
         const readers = api.current;
         if (typeof readers.watchSelection !== 'function') return undefined;
-        return readers.watchSelection((next) => setSelection(next));
+        return readers.watchSelection((next) => {
+          setSelection(next);
+          if (typeof readers.readBalance === 'function') {
+            readers.readBalance().then(
+              (balance) => setAccount(balance),
+              () => setAccount({ kind: 'failed' }),
+            );
+          }
+          const refresh = api.current.refreshRoute;
+          if (typeof refresh === 'function') refresh();
+        });
       }, [wide]);
 
       // The price table and holiday calendar the Host refreshed at this start.
@@ -670,8 +680,17 @@ window.__ModuleLoader__.load({
             .catch(() => settle({ status: 'failed', prices: null, holidays: null }));
         };
         ask();
+        // The Host re-reads the open-platform balance once a minute, and that
+        // balance is the only thing on this route that changes while the app
+        // runs. The 30 s tick below therefore re-reads the route too, so a card
+        // that loaded before a key was configured (or before the first balance
+        // arrived) picks the amount up instead of freezing on "no API key".
+        api.current.refreshRoute = () => {
+          if (live) ask();
+        };
         return () => {
           live = false;
+          api.current.refreshRoute = null;
           if (timer !== null) clearTimeout(timer);
         };
       }, [wide]);
@@ -701,6 +720,8 @@ window.__ModuleLoader__.load({
               if (live) setModel({ kind: 'failed' });
             },
           );
+          const refresh = api.current.refreshRoute;
+          if (typeof refresh === 'function') refresh();
         };
         load();
         const stop = readers.every(load, DATA_REFRESH_MS);
