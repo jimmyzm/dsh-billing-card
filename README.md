@@ -1,7 +1,7 @@
 <!-- prettier-ignore -->
 <div align="center">
 
-<img src="docs/icon.svg" alt="" height="72" />
+<img src="https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/icon.svg" alt="" height="72" />
 
 # dsh-billing-card
 
@@ -28,7 +28,7 @@ Prices come from the official DeepSeek documentation, the balance from the DSH a
 > The card fetches once at startup and serves itself from memory afterwards, so nothing in the sidebar ever waits for the network.
 
 <div align="center">
-  <img src="docs/preview-holiday.png" alt="The card on a statutory holiday" width="320" />
+  <img src="https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png" alt="The card on a statutory holiday" width="320" />
 </div>
 
 ## Features
@@ -46,11 +46,11 @@ Real renders, 256 px sidebar at 2× density.
 
 | Holiday — `国庆节` | Make-up workday — `调休` |
 | --- | --- |
-| ![Holiday](docs/preview-holiday.png) | ![Make-up](docs/preview-makeup.png) |
+| ![Holiday](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png) | ![Make-up](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/makeup-chip.png) |
 
 | English UI, USD prices | Dark theme |
 | --- | --- |
-| ![English UI](docs/preview-usd.png) | ![Dark theme](docs/preview-holiday-dark.png) |
+| ![English UI](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png) | ![Dark theme](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/dark-theme.png) |
 
 ## Installation
 
@@ -110,7 +110,9 @@ package.json        # dsh.bundle.patch + dsh.client
 cordis.patch.yml    # inserts the dsh-billing-card entry
 index.js parse.js   # Host half: startup fetch + the data route
 client.js           # Client half: the card and its built-in fallbacks
-locale/  icon.svg  docs/
+locale/             # zh/en dictionaries for the plugin manager
+icon.svg            # plugin icon
+docs/               # README logo and screenshots (repository only, not shipped)
 test/               # offline suite: parsers, host route, client render
 .github/workflows/  # ci (tests) and publish (npm with provenance)
 ```

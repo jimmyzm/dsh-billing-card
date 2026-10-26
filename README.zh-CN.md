@@ -1,7 +1,7 @@
 <!-- prettier-ignore -->
 <div align="center">
 
-<img src="docs/icon.svg" alt="" height="72" />
+<img src="https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/icon.svg" alt="" height="72" />
 
 # dsh-billing-card
 
@@ -28,7 +28,7 @@ DSH（DeepSeek Harness）侧边栏底部的一张卡片：还剩多少额度、�
 > 卡片在启动时抓取一次，之后从内存作答，侧边栏里的任何刷新都不用等网络。
 
 <div align="center">
-  <img src="docs/preview-holiday.png" alt="假期中的卡片" width="320" />
+  <img src="https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png" alt="假期中的卡片" width="320" />
 </div>
 
 ## 功能
@@ -46,11 +46,11 @@ DSH（DeepSeek Harness）侧边栏底部的一张卡片：还剩多少额度、�
 
 | 假期 —— `国庆节` | 调休工作日 —— `调休` |
 | --- | --- |
-| ![假期](docs/preview-holiday.png) | ![调休](docs/preview-makeup.png) |
+| ![假期](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png) | ![调休](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/makeup-chip.png) |
 
 | 英文界面 / 美元价目 | 暗色主题 |
 | --- | --- |
-| ![英文界面](docs/preview-usd.png) | ![暗色主题](docs/preview-holiday-dark.png) |
+| ![英文界面](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png) | ![暗色主题](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/dark-theme.png) |
 
 ## 安装
 
@@ -110,7 +110,9 @@ package.json        # dsh.bundle.patch + dsh.client
 cordis.patch.yml    # 插入 dsh-billing-card 一行
 index.js parse.js   # Host 半边：启动抓取 + 数据路由
 client.js           # Client 半边：卡片与内置副本
-locale/  icon.svg  docs/
+locale/             # 插件管理界面用的中英字典
+icon.svg            # 插件图标
+docs/               # README 徽标与截图（只在仓库里，不进包）
 test/               # 离线测试：解析器、Host 路由、Client 渲染
 .github/workflows/  # ci（测试）与 publish（带 provenance 发布 npm）
 ```
