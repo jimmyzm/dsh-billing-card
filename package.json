@@ -5,6 +5,9 @@
   "license": "MIT",
   "author": "jimmyzm",
   "type": "module",
+  "scripts": {
+    "test": "node test/parsers.test.mjs && node test/host.test.mjs && node test/client.test.mjs"
+  },
   "keywords": [
     "dsh",
     "dsh-plugin",

@@ -10,6 +10,9 @@
 ![平台](https://img.shields.io/badge/platform-web-blueviolet?style=flat-square)
 [![npm](https://img.shields.io/npm/v/@jimmyzm/dsh-billing-card?style=flat-square)](https://npmx.dev/package/@jimmyzm/dsh-billing-card)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](LICENSE)
+[![](https://img.shields.io/npm/unpacked-size/@jimmyzm/dsh-billing-card?style=flat-square)](https://npmx.dev/package/@jimmyzm/dsh-billing-card)
+[![](https://img.shields.io/github/actions/workflow/status/Jimmyzm/dsh-billing-card/ci.yml?style=flat-square&label=tests)](https://github.com/Jimmyzm/dsh-billing-card/actions/workflows/ci.yml)
+[![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
 
 [English](README.md) · **简体中文**
 
@@ -108,6 +111,8 @@ cordis.patch.yml    # 插入 dsh-billing-card 一行
 index.js parse.js   # Host 半边：启动抓取 + 数据路由
 client.js           # Client 半边：卡片与内置副本
 locale/  icon.svg  docs/
+test/               # 离线测试：解析器、Host 路由、Client 渲染
+.github/workflows/  # ci（测试）与 publish（带 provenance 发布 npm）
 ```
 
 想跑本地这份代码而不是 npm 上的包，把目录交给它即可 —— 会 link 进 profile，改 `client.js` 刷新页面就生效：
@@ -116,6 +121,7 @@ locale/  icon.svg  docs/
 dsh plugin --profile web add /path/to/dsh-billing-card
 ```
 
-以 [MIT 许可](LICENSE) 发布。
+`npm test` 跑离线测试：解析器对 `test/fixtures` 里保存的页面、Host 路由（上游用桩）、以及 Client 半边在迷你
+React 运行时里的渲染。无依赖、不联网。
 
-[![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
+以 [MIT 许可](LICENSE) 发布。

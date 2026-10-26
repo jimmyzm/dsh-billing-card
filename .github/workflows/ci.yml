@@ -1,0 +1,28 @@
+# Runs the offline test suite on every push and pull request.
+# No dependencies, no build step: the tests are plain Node scripts.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Syntax check
+        run: node --check index.js && node --check parse.js && node --check client.js
+
+      - name: Test
+        run: npm test
