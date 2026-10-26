@@ -36,7 +36,7 @@ Prices come from the official DeepSeek documentation, the balance from the DSH a
 - **Balance** — recharge plus bonus wallets, summed exactly and truncated to the cent, with the per-wallet detail in the tooltip.
 - **Two balances, one headline** — the DSH account balance bills the `deepseek-account` models, and the DeepSeek open-platform balance behind your API key bills the `deepseek-official` provider. The headline follows whichever provider the composer has selected, in real time; the account balance is the default and the fallback, so the card never goes blank when no key is configured.
 - **Unit prices for the selected model** — input, cache read and output in the tier that is active right now; switching models in the composer repaints them immediately. A DeepSeek model served by any other provider shows no price, because that provider sets its own.
-- **Billing period and countdown** — green `空闲` / yellow `高峰`, with the time until the next switch.
+- **Billing period and countdown** — green `Off-peak` / yellow `Peak`, with the time until the next switch.
 - **Holiday and make-up labels** — in the Chinese UI a holiday becomes a light blue banner at the top of the card (`国庆节假期中`), and a make-up workday gets a gray `调休` chip.
 - **Currency follows the interface language** — CNY prices in Chinese, USD prices everywhere else; the balance keeps its own currency.
 - **Follows the app** — light and dark themes, zh/en dictionaries, locale-aware numbers, and a quiet fallback to built-in data.
