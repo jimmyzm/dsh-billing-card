@@ -18,11 +18,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Jimmyzm/dsh-billing-card.git"
+    "url": "git+https://github.com/jimmyzm/dsh-billing-card.git"
   },
-  "homepage": "https://github.com/Jimmyzm/dsh-billing-card#readme",
+  "homepage": "https://github.com/jimmyzm/dsh-billing-card#readme",
   "bugs": {
-    "url": "https://github.com/Jimmyzm/dsh-billing-card/issues"
+    "url": "https://github.com/jimmyzm/dsh-billing-card/issues"
   },
   "exports": {
     ".": "./index.js",

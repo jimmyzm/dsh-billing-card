@@ -1,7 +1,7 @@
 <!-- prettier-ignore -->
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/icon.svg" alt="" height="72" />
+<img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/icon.svg" alt="" height="72" />
 
 # dsh-billing-card
 
@@ -11,7 +11,7 @@
 [![npm](https://img.shields.io/npm/v/@jimmyzm/dsh-billing-card?style=flat-square)](https://npmx.dev/package/@jimmyzm/dsh-billing-card)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](LICENSE)
 [![](https://img.shields.io/npm/unpacked-size/@jimmyzm/dsh-billing-card?style=flat-square)](https://npmx.dev/package/@jimmyzm/dsh-billing-card)
-[![](https://img.shields.io/github/actions/workflow/status/Jimmyzm/dsh-billing-card/ci.yml?style=flat-square&label=tests)](https://github.com/Jimmyzm/dsh-billing-card/actions/workflows/ci.yml)
+[![](https://img.shields.io/github/actions/workflow/status/jimmyzm/dsh-billing-card/ci.yml?style=flat-square&label=tests)](https://github.com/jimmyzm/dsh-billing-card/actions/workflows/ci.yml)
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
 
 [English](README.md) · **简体中文**
@@ -28,7 +28,7 @@ DSH（DeepSeek Harness）侧边栏底部的一张卡片：还剩多少额度、�
 > 卡片在启动时抓取一次，之后从内存作答，侧边栏里的任何刷新都不用等网络。
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png" alt="假期中的卡片" width="320" />
+  <img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png" alt="假期中的卡片" width="320" />
 </div>
 
 ## 功能
@@ -46,11 +46,11 @@ DSH（DeepSeek Harness）侧边栏底部的一张卡片：还剩多少额度、�
 
 | 假期 —— `国庆节` | 调休工作日 —— `调休` |
 | --- | --- |
-| ![假期](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png) | ![调休](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/makeup-chip.png) |
+| ![假期](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png) | ![调休](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/makeup-chip.png) |
 
 | 英文界面 / 美元价目 | 暗色主题 |
 | --- | --- |
-| ![英文界面](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png) | ![暗色主题](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/dark-theme.png) |
+| ![英文界面](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png) | ![暗色主题](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/dark-theme.png) |
 
 ## 安装
 

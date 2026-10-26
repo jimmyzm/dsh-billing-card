@@ -1,7 +1,7 @@
 <!-- prettier-ignore -->
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/icon.svg" alt="" height="72" />
+<img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/icon.svg" alt="" height="72" />
 
 # dsh-billing-card
 
@@ -11,7 +11,7 @@
 [![npm](https://img.shields.io/npm/v/@jimmyzm/dsh-billing-card?style=flat-square)](https://npmx.dev/package/@jimmyzm/dsh-billing-card)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](LICENSE)
 [![](https://img.shields.io/npm/unpacked-size/@jimmyzm/dsh-billing-card?style=flat-square)](https://npmx.dev/package/@jimmyzm/dsh-billing-card)
-[![](https://img.shields.io/github/actions/workflow/status/Jimmyzm/dsh-billing-card/ci.yml?style=flat-square&label=tests)](https://github.com/Jimmyzm/dsh-billing-card/actions/workflows/ci.yml)
+[![](https://img.shields.io/github/actions/workflow/status/jimmyzm/dsh-billing-card/ci.yml?style=flat-square&label=tests)](https://github.com/jimmyzm/dsh-billing-card/actions/workflows/ci.yml)
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
 
 **English** · [简体中文](README.zh-CN.md)
@@ -28,7 +28,7 @@ Prices come from the official DeepSeek documentation, the balance from the DSH a
 > The card fetches once at startup and serves itself from memory afterwards, so nothing in the sidebar ever waits for the network.
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png" alt="The card on a statutory holiday" width="320" />
+  <img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png" alt="The card on a statutory holiday" width="320" />
 </div>
 
 ## Features
@@ -46,11 +46,11 @@ Real renders, 256 px sidebar at 2× density.
 
 | Holiday — `国庆节` | Make-up workday — `调休` |
 | --- | --- |
-| ![Holiday](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png) | ![Make-up](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/makeup-chip.png) |
+| ![Holiday](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png) | ![Make-up](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/makeup-chip.png) |
 
 | English UI, USD prices | Dark theme |
 | --- | --- |
-| ![English UI](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png) | ![Dark theme](https://raw.githubusercontent.com/Jimmyzm/dsh-billing-card/main/docs/screenshots/dark-theme.png) |
+| ![English UI](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png) | ![Dark theme](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/dark-theme.png) |
 
 ## Installation
 
