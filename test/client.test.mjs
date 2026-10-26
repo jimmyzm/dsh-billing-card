@@ -139,15 +139,21 @@ function makeContext({ balance = undefined, catalog = undefined, services = {}, 
 }
 
 // ---------------------------------------------------------------- mount helper
-async function mount({ now, balance, catalog, services = liveServices().services, props = {}, data = null, onApply, onTimer, locale = 'zh' }) {
+async function mount({ now, balance, catalog, services = liveServices().services, props = {}, data = null, onApply, onTimer, locale = 'zh', route = 'json' }) {
   // The card asks the Host route on mount; `data` is its answer (or a failure).
+  // `route` names the transport state instead: an absent `fetch` global, or a
+  // route that answers 404.
   const realFetch = globalThis.fetch;
   const realSetTimeout = globalThis.setTimeout;
   const delays = [];
-  globalThis.fetch = async () => {
-    if (data === null) throw new Error('no route');
-    return { ok: true, json: async () => data };
-  };
+  globalThis.fetch =
+    route === 'absent'
+      ? undefined
+      : async () => {
+          if (route === 'http-404') return { ok: false, status: 404, json: async () => null };
+          if (data === null) throw new Error('no route');
+          return { ok: true, json: async () => data };
+        };
   globalThis.setTimeout = (fn, delay, ...rest) => {
     delays.push(delay);
     // Run the Host-poll cadence immediately so a loading answer cannot stall the run.
@@ -333,6 +339,27 @@ const CASES = [
   ['monday-1200', Date.parse('2026-10-26T04:00:00Z'), 'idle', '距高峰 02:00:00'],
   ['friday-1759', Date.parse('2026-10-30T09:59:00Z'), 'peak', '距空闲 00:01:00'],
   ['saturday-1000', Date.parse('2026-10-31T02:00:00Z'), 'idle', '距高峰 1天 23:00:00'],
+  ['sunday-1000', Date.parse('2026-11-01T02:00:00Z'), 'idle', '距高峰 23:00:00'],
+  // A make-up Saturday is billed by the weekday rule, so it is idle all day,
+  // and it still needs the 调休 chip — asserted in its own block below.
+  ['makeup-saturday-1000', Date.parse('2026-10-10T02:00:00Z'), 'idle', '距高峰 1天 23:00:00'],
+  // The first weekday of the Spring Festival is idle, and the countdown walks
+  // the whole run to the day after it.
+  ['spring-festival-weekday', Date.parse('2026-02-16T02:00:00Z'), 'idle', '距高峰 7天 23:00:00'],
+  // Every boundary minute on every weekday: the rule treats Mon-Fri alike, so
+  // a wrong weekday lookup has to surface on each of the five, not just Monday.
+  ...['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30'].flatMap((date, position) => {
+    const name = ['mon', 'tue', 'wed', 'thu', 'fri'][position];
+    return [
+      [name + '-0900', Date.parse(date + 'T01:00:00Z'), 'peak', '距空闲 03:00:00'],
+      [name + '-1159', Date.parse(date + 'T03:59:59Z'), 'peak', '距空闲 00:00:01'],
+      [name + '-1200', Date.parse(date + 'T04:00:00Z'), 'idle', '距高峰 02:00:00'],
+      [name + '-1359', Date.parse(date + 'T05:59:59Z'), 'idle', '距高峰 00:00:01'],
+      [name + '-1400', Date.parse(date + 'T06:00:00Z'), 'peak', '距空闲 04:00:00'],
+      [name + '-1759', Date.parse(date + 'T09:59:59Z'), 'peak', '距空闲 00:00:01'],
+      [name + '-1800', Date.parse(date + 'T10:00:00Z'), 'idle', name === 'fri' ? '距高峰 2天 15:00:00' : '距高峰 15:00:00'],
+    ];
+  }),
 ];
 
 console.log('module wiring');
@@ -904,6 +931,272 @@ if (hostPayload !== null) {
   }
 } else {
   console.log('SKIP host payload cases (run /tmp/host-test.mjs first)');
+}
+
+console.log('make-up weekend');
+{
+  // The rule bills a （班） day by its weekday, and every 2026 make-up day is a
+  // weekend day, so it stays idle; the gray chip is what explains the state.
+  const { tree } = await mount({ now: Date.parse('2026-10-10T02:00:00Z'), balance: READY_BALANCE, catalog: CATALOG, data: null });
+  check('a make-up Saturday is idle', byClass(tree, 'dbc-chip').props.className, 'dbc-chip dbc-chip-idle');
+  check('a make-up Saturday draws the 调休 chip', text(chipOf(tree, 'makeup')), '调休');
+  check('a make-up Saturday has no holiday banner', byClass(tree, 'dbc-holiday'), null);
+}
+
+console.log('malformed payloads');
+const SNAPSHOT_ZH_PEAK = JSON.stringify(['2.00', '0.04', '8.00']);
+const MALFORMED = [
+  [
+    'a partial tier',
+    {
+      status: 'ready',
+      prices: {
+        CNY: {
+          asOf: '2026-10-26',
+          models: {
+            'deepseek-flash': { label: 'x', peak: { input: 2, cacheRead: 0.04, output: 8 }, idle: { input: 1, cacheRead: 0.02 } },
+          },
+        },
+        USD: null,
+      },
+      holidays: null,
+    },
+  ],
+  [
+    'string amounts',
+    {
+      status: 'ready',
+      prices: {
+        CNY: {
+          models: {
+            'deepseek-flash': {
+              peak: { input: '2', cacheRead: 0.04, output: 8 },
+              idle: { input: '1', cacheRead: '0.02', output: '4' },
+            },
+          },
+        },
+        USD: null,
+      },
+      holidays: null,
+    },
+  ],
+  [
+    'a negative amount',
+    {
+      status: 'ready',
+      prices: {
+        CNY: {
+          models: {
+            'deepseek-flash': {
+              peak: { input: 2, cacheRead: 0.04, output: 8 },
+              idle: { input: -1, cacheRead: 0.02, output: 4 },
+            },
+          },
+        },
+        USD: null,
+      },
+      holidays: null,
+    },
+  ],
+  [
+    'out-of-range days',
+    { status: 'ready', prices: { CNY: null, USD: null }, holidays: { days: [0, -3, 60000, 999999], names: {}, makeup: [] } },
+  ],
+  [
+    'non-numeric days',
+    {
+      status: 'ready',
+      prices: { CNY: null, USD: null },
+      holidays: { days: ['2026-10-26', null, 1.5, {}, true], names: {}, makeup: [] },
+    },
+  ],
+  [
+    'non-numeric name keys',
+    {
+      status: 'ready',
+      prices: { CNY: null, USD: null },
+      holidays: { days: [dayOf(2026, 10, 26)], names: { abc: '国庆节', '12x': '零', 7: '数字' }, makeup: [] },
+    },
+    JSON.stringify(['1.00', '0.02', '4.00']),
+  ],
+  [
+    'a make-up day overlapping a holiday',
+    {
+      status: 'ready',
+      prices: { CNY: null, USD: null },
+      holidays: {
+        days: [dayOf(2026, 10, 26)],
+        names: { [dayOf(2026, 10, 26)]: '国庆节' },
+        makeup: [dayOf(2026, 10, 26)],
+        makeupNames: { [dayOf(2026, 10, 26)]: '国庆节' },
+      },
+    },
+    JSON.stringify(['1.00', '0.02', '4.00']),
+  ],
+  [
+    'holidays without names',
+    { status: 'ready', prices: { CNY: null, USD: null }, holidays: { days: [dayOf(2026, 10, 26)], makeup: [] } },
+    JSON.stringify(['1.00', '0.02', '4.00']),
+  ],
+  [
+    'an old-Host payload',
+    {
+      status: 'ready',
+      prices: {
+        asOf: '2026-10-26',
+        models: {
+          'deepseek-flash': { peak: { input: 2, cacheRead: 0.04, output: 8 }, idle: { input: 0.5, cacheRead: 0.02, output: 4 } },
+        },
+      },
+      holidays: null,
+    },
+  ],
+];
+for (const [label, data, expectedPrices = SNAPSHOT_ZH_PEAK] of MALFORMED) {
+  const { tree } = await mount({ now: PEAK_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
+  check(label + ': the card still renders', byClass(tree, 'dbc-card') !== null, true);
+  check(label + ': it keeps the snapshot prices', JSON.stringify(priced(tree)), expectedPrices);
+  check(label + ': the tooltip marks the snapshot', byClass(tree, 'dbc-tier').props.title.includes('内置快照'), true);
+  check(label + ': the chip still renders', byClass(tree, 'dbc-chip').props.className.startsWith('dbc-chip dbc-chip-'), true);
+}
+
+{
+  // A name that is not keyed by a day number cannot label a day, so the day
+  // keeps its idle billing but loses its banner.
+  const { tree } = await mount({
+    now: PEAK_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    data: {
+      status: 'ready',
+      prices: { CNY: null, USD: null },
+      holidays: { days: [dayOf(2026, 10, 26)], names: { abc: '国庆节', '12x': '零' }, makeup: [] },
+    },
+  });
+  check('a non-numeric name key is dropped', byClass(tree, 'dbc-holiday'), null);
+  check('its day still bills as a holiday', byClass(tree, 'dbc-chip').props.className, 'dbc-chip dbc-chip-idle');
+}
+
+{
+  const { tree } = await mount({
+    now: PEAK_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    data: { status: 'ready', prices: { CNY: null, USD: null }, holidays: { days: [dayOf(2026, 10, 26)], makeup: [] } },
+  });
+  check('a nameless holiday keeps its day', byClass(tree, 'dbc-chip').props.className, 'dbc-chip dbc-chip-idle');
+  check('a nameless holiday has no banner', byClass(tree, 'dbc-holiday'), null);
+}
+
+{
+  // A day in both books is still one day off (the parsers drop the make-up
+  // entry, the client re-validates only the shape), but the client itself does
+  // not dedupe: the overlap renders the banner and the gray chip together.
+  const day = dayOf(2026, 10, 26);
+  const { tree } = await mount({
+    now: PEAK_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    data: {
+      status: 'ready',
+      prices: { CNY: null, USD: null },
+      holidays: { days: [day], names: { [day]: '国庆节' }, makeup: [day], makeupNames: { [day]: '国庆节' } },
+    },
+  });
+  check('an overlapping （休） day is still idle', byClass(tree, 'dbc-chip').props.className, 'dbc-chip dbc-chip-idle');
+  check('an overlapping day keeps its banner', text(byClass(tree, 'dbc-holiday')), '国庆节假期中');
+  check('the client keeps the overlapping 调休 chip (observed, not deduped)', text(chipOf(tree, 'makeup')), '调休');
+}
+
+console.log('route failures');
+{
+  const { tree, delays } = await mount({
+    now: PEAK_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    data: livePayload(),
+    route: 'http-404',
+  });
+  check('a 404 route keeps the snapshot prices', JSON.stringify(priced(tree)), SNAPSHOT_ZH_PEAK);
+  check('a 404 route marks the snapshot in the tooltip', byClass(tree, 'dbc-tier').props.title.includes('内置快照'), true);
+  check('a 404 route retries twice more', delays.filter((delay) => delay === 3000).length, 2);
+  check('a 404 route still renders the card', byClass(tree, 'dbc-card') !== null, true);
+}
+{
+  const { tree, delays } = await mount({
+    now: PEAK_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    data: livePayload(),
+    route: 'absent',
+  });
+  check('an absent fetch keeps the snapshot prices', JSON.stringify(priced(tree)), SNAPSHOT_ZH_PEAK);
+  check('an absent fetch marks the snapshot in the tooltip', byClass(tree, 'dbc-tier').props.title.includes('内置快照'), true);
+  check('an absent fetch never polls the route', delays.filter((delay) => delay === 3000).length, 0);
+  check('an absent fetch still renders the card', byClass(tree, 'dbc-card') !== null, true);
+}
+
+console.log('live CNY without a USD table');
+{
+  const data = livePayload({ prices: { CNY: cnyTable(0.5), USD: null } });
+  const zh = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
+  check('zh keeps the live CNY table', JSON.stringify(priced(zh.tree)), JSON.stringify(['0.50', '0.02', '4.00']));
+  check('zh marks it as a startup sync', byClass(zh.tree, 'dbc-tier').props.title.includes('启动时校准'), true);
+  const en = await mountLocalized('en', { now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
+  check('en falls back to the built-in USD table', JSON.stringify(priced(en.tree)), JSON.stringify(['0.15', '0.003', '0.60']));
+  check('en marks the built-in snapshot', byClass(en.tree, 'dbc-tier').props.title.includes('built-in snapshot'), true);
+}
+
+console.log('locale currency matrix');
+{
+  const data = livePayload({ prices: { CNY: cnyTable(0.5), USD: usdTable(0.11) } });
+  for (const language of ['zh', 'zh-CN', 'zh-TW']) {
+    const { tree } = await mountLocalized(language, { now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
+    check(language + ' reads the CNY table', JSON.stringify(priced(tree)), JSON.stringify(['0.50', '0.02', '4.00']));
+    check(language + ' keeps the bare ¥ balance', text(byClass(tree, 'dbc-balance')), '¥32.50');
+  }
+  for (const language of ['en', 'ja', 'xx']) {
+    const { tree } = await mountLocalized(language, { now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
+    check(language + ' reads the USD table', JSON.stringify(priced(tree)), JSON.stringify(['0.11', '0.003', '0.60']));
+    check(language + ' keeps the third decimal', priced(tree)[1], '0.003');
+    check(language + ' prefixes the ISO code', text(byClass(tree, 'dbc-balance')), 'CNY ¥32.50');
+    check(language + ' names USD in the tooltip', byClass(tree, 'dbc-tier').props.title.includes('USD per 1M tokens'), true);
+  }
+}
+
+console.log('timezone independence');
+{
+  // The billing rule is Beijing time, so the machine's zone must not move a
+  // single boundary: every row below is a Beijing-local minute.
+  const rows = [
+    ['mon-0900', Date.parse('2026-10-26T01:00:00Z'), 'dbc-chip dbc-chip-peak', '距空闲 03:00:00'],
+    ['mon-1159', Date.parse('2026-10-26T03:59:59Z'), 'dbc-chip dbc-chip-peak', '距空闲 00:00:01'],
+    ['mon-1200', Date.parse('2026-10-26T04:00:00Z'), 'dbc-chip dbc-chip-idle', '距高峰 02:00:00'],
+    ['mon-1359', Date.parse('2026-10-26T05:59:59Z'), 'dbc-chip dbc-chip-idle', '距高峰 00:00:01'],
+    ['mon-1400', Date.parse('2026-10-26T06:00:00Z'), 'dbc-chip dbc-chip-peak', '距空闲 04:00:00'],
+    ['mon-1759', Date.parse('2026-10-26T09:59:59Z'), 'dbc-chip dbc-chip-peak', '距空闲 00:00:01'],
+    ['fri-1800', Date.parse('2026-10-30T10:00:00Z'), 'dbc-chip dbc-chip-idle', '距高峰 2天 15:00:00'],
+    ['holiday', Date.parse('2026-10-01T02:00:00Z'), 'dbc-chip dbc-chip-idle', '距高峰 6天 23:00:00'],
+  ];
+  const original = process.env.TZ;
+  try {
+    process.env.TZ = 'America/New_York';
+    const newYorkHour = new Date(rows[0][1]).getHours();
+    process.env.TZ = 'Pacific/Kiritimati';
+    const kiritimatiHour = new Date(rows[0][1]).getHours();
+    check('the two zones read the same instant differently', newYorkHour !== kiritimatiHour, true);
+    for (const zone of ['America/New_York', 'Pacific/Kiritimati']) {
+      process.env.TZ = zone;
+      for (const [label, now, chipClass, countdown] of rows) {
+        const { tree } = await mount({ now, balance: READY_BALANCE, catalog: CATALOG, data: null });
+        check(zone + ' ' + label + ' keeps the chip', byClass(tree, 'dbc-chip').props.className, chipClass);
+        check(zone + ' ' + label + ' keeps the countdown', text(byClass(tree, 'dbc-countdown')), countdown);
+      }
+    }
+  } finally {
+    if (original === undefined) delete process.env.TZ;
+    else process.env.TZ = original;
+  }
 }
 
 console.log(failures === 0 ? '\nclient: ALL CHECKS PASSED' : '\nclient: ' + failures + ' CHECK(S) FAILED');

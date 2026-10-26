@@ -18,10 +18,13 @@ function check(label, actual, expected) {
 
 // --------------------------------------------------------------- stub upstream
 const fixture = (name) => fs.readFileSync(new URL('./fixtures/' + name, import.meta.url), 'utf8');
+const ZH_URL = 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing/';
+const EN_URL = 'https://api-docs.deepseek.com/quick_start/pricing/';
+const CAL_URL = 'https://calendars.icloud.com/holidays/cn_zh.ics';
 const upstream = {
-  'https://api-docs.deepseek.com/zh-cn/quick_start/pricing/': fixture('zh-pricing.html'),
-  'https://api-docs.deepseek.com/quick_start/pricing/': fixture('en-pricing.html'),
-  'https://calendars.icloud.com/holidays/cn_zh.ics': fixture('cn_zh.ics'),
+  [ZH_URL]: fixture('zh-pricing.html'),
+  [EN_URL]: fixture('en-pricing.html'),
+  [CAL_URL]: fixture('cn_zh.ics'),
 };
 const requested = [];
 globalThis.fetch = async (url) => {
@@ -37,8 +40,8 @@ globalThis.fetch = async (url) => {
  * now when every dependency is present and otherwise waits for the service,
  * and losing the service disposes what the body created.
  */
-function makeHost(present) {
-  const services = { logger: { warn: (message) => warnings.push(String(message)) } };
+function makeHost(present, sink = warnings) {
+  const services = { logger: { warn: (message) => sink.push(String(message)) } };
   const active = [];
   const routes = [];
   const waiting = [];
@@ -166,6 +169,155 @@ check('content type', get.headers['content-type'], 'application/json; charset=ut
 check('not cached', get.headers['cache-control'], 'no-store');
 check('POST is rejected', (await answer(routes[0], 'POST')).status, 405);
 check('HEAD is allowed', (await answer(routes[0], 'HEAD')).status, 200);
+
+// --------------------------------------------------------- upstream failures
+/**
+ * A fetch stub whose per-URL behaviour the caller overrides: a fixture by
+ * default, or a thrown network error, a non-2xx status, an empty body, or a
+ * request that only ends when its AbortSignal fires.
+ */
+function stub(overrides = {}) {
+  return async (url, init) => {
+    const spec = overrides[String(url)] === undefined ? {} : overrides[String(url)];
+    if (spec.network === true) throw new Error('upstream unreachable');
+    if (spec.status !== undefined) return { ok: false, status: spec.status, text: async () => '' };
+    if (spec.hang === true) {
+      return new Promise((resolve, reject) => {
+        const signal = init === undefined ? undefined : init.signal;
+        if (signal === undefined) return;
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
+    }
+    const body = spec.body !== undefined ? spec.body : upstream[String(url)];
+    if (body === undefined) throw new Error('unexpected fetch: ' + url);
+    return { ok: true, status: 200, text: async () => body };
+  };
+}
+
+/** Apply the host against a stubbed upstream and wait for a settled payload. */
+async function loadWith(overrides) {
+  const sink = [];
+  const instance = makeHost(true, sink);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = stub(overrides);
+  try {
+    apply(instance.ctx);
+    let current = await answer(instance.routes[0], 'GET');
+    let body = JSON.parse(current.body);
+    for (let attempt = 0; attempt < 100 && body.status === 'loading'; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      current = await answer(instance.routes[0], 'GET');
+      body = JSON.parse(current.body);
+    }
+    return { payload: body, sink, response: current };
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+console.log('\n-- one upstream down at a time');
+{
+  const { payload: deadCny, sink } = await loadWith({ [ZH_URL]: { network: true } });
+  check('a dead CNY page: status is ready', deadCny.status, 'ready');
+  check('a dead CNY page: that source failed', deadCny.sources['pricing.CNY'], 'failed');
+  check('a dead CNY page: the USD source is live', deadCny.sources['pricing.USD'], 'ready');
+  check('a dead CNY page: the calendar is live', deadCny.sources.calendar, 'ready');
+  check('a dead CNY page: no CNY table', deadCny.prices.CNY, null);
+  check('a dead CNY page: the USD table survives', deadCny.prices.USD.models['deepseek-flash'].idle.input, 0.15);
+  check('a dead CNY page: one warning', sink.length, 1);
+  check(
+    'a dead CNY page: the warning names that source only',
+    sink[0].slice(0, '[dsh-billing-card] pricing (CNY) not refreshed:'.length),
+    '[dsh-billing-card] pricing (CNY) not refreshed:',
+  );
+}
+{
+  const { payload: deadUsd, sink } = await loadWith({ [EN_URL]: { status: 503 } });
+  check('a 503 USD page: status is ready', deadUsd.status, 'ready');
+  check('a 503 USD page: that source failed', deadUsd.sources['pricing.USD'], 'failed');
+  check('a 503 USD page: the CNY source is live', deadUsd.sources['pricing.CNY'], 'ready');
+  check('a 503 USD page: the calendar is live', deadUsd.sources.calendar, 'ready');
+  check('a 503 USD page: no USD table', deadUsd.prices.USD, null);
+  check('a 503 USD page: the CNY table survives', deadUsd.prices.CNY.models['deepseek-flash'].idle.input, 1);
+  check('a 503 USD page: one warning', sink.length, 1);
+  check('a 503 USD page: the warning reports the status', sink[0].includes('HTTP 503'), true);
+  check('a 503 USD page: the warning names the USD source', sink[0].includes('pricing (USD)'), true);
+}
+{
+  const { payload: deadCalendar, sink } = await loadWith({ [CAL_URL]: { network: true } });
+  check('a dead calendar: status is ready', deadCalendar.status, 'ready');
+  check('a dead calendar: that source failed', deadCalendar.sources.calendar, 'failed');
+  check('a dead calendar: both price sources are live', deadCalendar.sources['pricing.CNY'] + '/' + deadCalendar.sources['pricing.USD'], 'ready/ready');
+  check('a dead calendar: no holidays', deadCalendar.holidays, null);
+  check('a dead calendar: both tables survive', deadCalendar.prices.CNY.currency + '/' + deadCalendar.prices.USD.currency, 'CNY/USD');
+  check('a dead calendar: one warning', sink.length, 1);
+  check('a dead calendar: the warning names the calendar', sink[0].slice(0, '[dsh-billing-card] calendar not refreshed:'.length), '[dsh-billing-card] calendar not refreshed:');
+}
+
+console.log('\n-- every upstream down');
+{
+  const { payload: allDown, sink, response } = await loadWith({
+    [ZH_URL]: { network: true },
+    [EN_URL]: { network: true },
+    [CAL_URL]: { network: true },
+  });
+  check('all down: status is failed', allDown.status, 'failed');
+  check('all down: CNY failed', allDown.sources['pricing.CNY'], 'failed');
+  check('all down: USD failed', allDown.sources['pricing.USD'], 'failed');
+  check('all down: calendar failed', allDown.sources.calendar, 'failed');
+  check('all down: no CNY table', allDown.prices.CNY, null);
+  check('all down: no USD table', allDown.prices.USD, null);
+  check('all down: no holidays', allDown.holidays, null);
+  check('all down: the payload is timestamped', /^\d{4}-\d{2}-\d{2}T/.test(allDown.at), true);
+  check('all down: three warnings', sink.length, 3);
+  check('all down: the route still answers 200', response.status, 200);
+  check('all down: the route still answers JSON', response.headers['content-type'], 'application/json; charset=utf-8');
+  check('all down: the shape is unchanged', Object.keys(allDown).sort().join(','), 'at,holidays,prices,sources,status');
+}
+
+console.log('\n-- empty and unparsable bodies');
+{
+  const { payload: empty, sink } = await loadWith({ [ZH_URL]: { body: '' }, [EN_URL]: { body: '' }, [CAL_URL]: { body: '' } });
+  check('empty bodies: status is failed', empty.status, 'failed');
+  check('empty bodies: all sources failed', Object.values(empty.sources).join(','), 'failed,failed,failed');
+  check('empty bodies: three warnings', sink.length, 3);
+  check('empty bodies: two pages carried no price table', sink.filter((line) => line.includes('did not carry the price table')).length, 2);
+  check('empty bodies: the calendar carried no entry', sink.filter((line) => line.includes('carried no holiday entry')).length, 1);
+}
+{
+  const { payload: unparsable, sink } = await loadWith({
+    [ZH_URL]: { body: '<html><body><p>maintenance</p></body></html>' },
+    [EN_URL]: { body: '<table><tr><td>API</td><td>rate limit</td></tr></table>' },
+    [CAL_URL]: { body: 'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:立春\nDTSTART;VALUE=DATE:20260204\nEND:VEVENT\nEND:VCALENDAR\n' },
+  });
+  check('unparsable bodies: status is failed', unparsable.status, 'failed');
+  check('unparsable bodies: the HTML page is a failed source', unparsable.sources['pricing.CNY'], 'failed');
+  check('unparsable bodies: the table without prices is a failed source', unparsable.sources['pricing.USD'], 'failed');
+  check('unparsable bodies: the calendar without a marker is a failed source', unparsable.sources.calendar, 'failed');
+  check('unparsable bodies: three warnings', sink.length, 3);
+}
+
+console.log('\n-- a hanging upstream');
+{
+  const realTimeout = AbortSignal.timeout;
+  AbortSignal.timeout = (ms) => realTimeout.call(AbortSignal, Math.min(ms, 25));
+  try {
+    const { payload: hanging, sink } = await loadWith({ [ZH_URL]: { hang: true } });
+    check('a hanging page: that source failed', hanging.sources['pricing.CNY'], 'failed');
+    check('a hanging page: the payload is still ready', hanging.status, 'ready');
+    check('a hanging page: the USD source is live', hanging.sources['pricing.USD'], 'ready');
+    check('a hanging page: the calendar is live', hanging.sources.calendar, 'ready');
+    check('a hanging page: no CNY table', hanging.prices.CNY, null);
+    check('a hanging page: one warning', sink.length, 1);
+    check(
+      'a hanging page: the warning names that source',
+      sink[0].slice(0, '[dsh-billing-card] pricing (CNY) not refreshed:'.length),
+      '[dsh-billing-card] pricing (CNY) not refreshed:',
+    );
+  } finally {
+    AbortSignal.timeout = realTimeout;
+  }
+}
 
 console.log(failures === 0 ? '\nhost: ALL CHECKS PASSED' : '\nhost: ' + failures + ' CHECK(S) FAILED');
 process.exitCode = failures === 0 ? 0 : 1;
