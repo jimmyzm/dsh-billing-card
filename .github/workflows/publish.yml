@@ -1,0 +1,30 @@
+# Publishes the package to npm when a GitHub release is published, so the npm
+# version is provably built from this repository at this tag.
+#
+# One-time setup on npmjs.com: Package settings → Trusted publishing → add this
+# repository (Jimmyzm/dsh-billing-card) with workflow name `publish.yml`. No
+# token secret is needed; the job authenticates with GitHub's OIDC identity.
+name: publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish with provenance
+        run: npm publish --provenance --access public
