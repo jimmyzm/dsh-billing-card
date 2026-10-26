@@ -114,6 +114,8 @@ locale/             # zh/en dictionaries for the plugin manager
 icon.svg            # plugin icon
 docs/               # README logo and screenshots (repository only, not shipped)
 test/               # offline suite: parsers, host route, client render
+AGENTS.md           # working spec for agents on this repo (repository only, not shipped)
+.agents/skills/     # project skills for agents on this repo (repository only, not shipped)
 .github/workflows/  # ci (tests) and publish (npm with provenance)
 ```
 
@@ -125,5 +127,7 @@ dsh plugin --profile web add /path/to/dsh-billing-card
 
 `npm test` runs the offline suite: the parsers against the pages captured in `test/fixtures`, the Host route with
 a stubbed upstream, and the Client half in a miniature React runtime. No dependencies, no network.
+
+`AGENTS.md` is the working spec for agents on this repository: the invariants (never invent a price or holiday, no currency conversion, exact decimal-string money math, per-source fallbacks), the compatibility guards, and the three project skills under `.agents/skills/` — `dsh-plugin-development`, `billing-regression-testing`, and `release-verification`. DSH discovers `AGENTS.md` and those skills by walking up from the session's working directory to the nearest `.git`, so open agent sessions at the repository root.
 
 Released under the [MIT license](LICENSE).

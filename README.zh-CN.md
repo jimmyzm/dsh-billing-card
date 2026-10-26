@@ -114,6 +114,8 @@ locale/             # 插件管理界面用的中英字典
 icon.svg            # 插件图标
 docs/               # README 徽标与截图（只在仓库里，不进包）
 test/               # 离线测试：解析器、Host 路由、Client 渲染
+AGENTS.md           # 面向 Agent 的开发规范（只在仓库里，不进包）
+.agents/skills/     # 面向 Agent 的项目 skills（只在仓库里，不进包）
 .github/workflows/  # ci（测试）与 publish（带 provenance 发布 npm）
 ```
 
@@ -125,5 +127,7 @@ dsh plugin --profile web add /path/to/dsh-billing-card
 
 `npm test` 跑离线测试：解析器对 `test/fixtures` 里保存的页面、Host 路由（上游用桩）、以及 Client 半边在迷你
 React 运行时里的渲染。无依赖、不联网。
+
+`AGENTS.md` 是这个仓库的 Agent 开发规范：不可违背的约束（价格与节假日不许编、不做汇率换算、金额用十进制字符串精确截断、按数据源分别回退）、兼容性红线，以及 `.agents/skills/` 下的三个 skill —— `dsh-plugin-development`、`billing-regression-testing`、`release-verification`。DSH 是从会话工作目录往上找最近的 `.git` 来发现 `AGENTS.md` 和这些 skill 的，所以 Agent 会话请开在仓库根目录。
 
 以 [MIT 许可](LICENSE) 发布。
