@@ -584,6 +584,34 @@ console.log('live model switching');
   check('unpriced model note', text(byClass(next, 'dbc-note')), '官方价目未收录该模型');
 }
 
+console.log('prices need a DeepSeek provider');
+{
+  // The list is DeepSeek's own, so a DeepSeek model served by someone else is
+  // billed by that provider and the card quotes nothing.
+  const routed = {
+    ok: true,
+    value: { default: { provider: 'some-router', model: 'deepseek-v4-pro' }, groups: [] },
+  };
+  const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: routed });
+  check('a foreign provider shows no price', priced(tree).length, 0);
+  check('a foreign provider explains itself', text(byClass(tree, 'dbc-note')), '该渠道不走官方价目');
+
+  const own = {
+    ok: true,
+    value: { default: { provider: 'deepseek-account', model: 'deepseek-v4-pro' }, groups: [] },
+  };
+  const { tree: kept } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: own });
+  check('a DeepSeek provider still prices', JSON.stringify(priced(kept)), JSON.stringify(['4.50', '0.15', '13.50']));
+
+  // Without a provider the card keeps the old behaviour: price what it knows.
+  const unknown = { ok: true, value: { default: { model: 'deepseek-v4-pro' }, groups: [] } };
+  const { tree: bare } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: unknown });
+  check('an unknown provider still prices', priced(bare).length, 3);
+
+  const { tree: english } = await mountLocalized('en', { now: IDLE_NOW, balance: READY_BALANCE, catalog: routed });
+  check('the explanation is translated', text(byClass(english, 'dbc-note')), 'This provider has no list price');
+}
+
 console.log('selection services appear late');
 {
   const live = liveServices({ 'session-1': { provider: 'deepseek-account', model: 'deepseek-v4-pro' } });

@@ -35,7 +35,7 @@ Prices come from the official DeepSeek documentation, the balance from the DSH a
 
 - **Balance** — recharge plus bonus wallets, summed exactly and truncated to the cent, with the per-wallet detail in the tooltip.
 - **Two balances, one headline** — the DSH account balance bills the `deepseek-account` models, and the DeepSeek open-platform balance behind your API key bills the `deepseek-official` provider. The headline follows whichever provider the composer has selected, in real time; the account balance is the default and the fallback, so the card never goes blank when no key is configured.
-- **Unit prices for the selected model** — input, cache read and output in the tier that is active right now; switching models in the composer repaints them immediately.
+- **Unit prices for the selected model** — input, cache read and output in the tier that is active right now; switching models in the composer repaints them immediately. A DeepSeek model served by any other provider shows no price, because that provider sets its own.
 - **Billing period and countdown** — green `空闲` / yellow `高峰`, with the time until the next switch.
 - **Holiday and make-up labels** — in the Chinese UI a holiday becomes a light blue banner at the top of the card (`国庆节假期中`), and a make-up workday gets a gray `调休` chip.
 - **Currency follows the interface language** — CNY prices in Chinese, USD prices everywhere else; the balance keeps its own currency.
@@ -100,6 +100,7 @@ A Chinese UI quotes the CNY page, every other language the USD page.
 
 - Prices and holidays are calibrated once per application start; a long-running app keeps what it started with. The open-platform balance is the exception: it refreshes once a minute.
 - Without a `DEEPSEEK_API_KEY` the card simply shows the account balance; the tooltip says no key is configured.
+- A DeepSeek model served by a provider other than DeepSeek's own shows no price: the table is DeepSeek's list, and quoting it there would be a made-up number.
 - Nothing is converted between currencies, and the balance keeps its wallet currency.
 - The card needs the same-origin HTTP GUI (`dsh web`); without a web server it runs on the built-in copies.
 - Live model following needs the optional `uiSession` and `modelDirectories` services — without them the card prices the catalog default.
