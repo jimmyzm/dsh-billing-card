@@ -8,6 +8,7 @@
 *DSH 侧边栏里的 DeepSeek 余额、实时单价与计费时段*
 
 ![平台](https://img.shields.io/badge/platform-web-blueviolet?style=flat-square)
+[![npm](https://img.shields.io/npm/v/@jimmyzm/dsh-billing-card?style=flat-square)](https://www.npmjs.com/package/@jimmyzm/dsh-billing-card)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](LICENSE)
 
 [English](README.md) · **简体中文**
@@ -50,7 +51,7 @@ DSH（DeepSeek Harness）侧边栏底部的一张卡片：还剩多少额度、�
 
 ## 安装
 
-插件已发布到 npm，是一个 DSH bundle。`--profile` 写你实际在跑的 profile（桌面应用是 `desktop`，`dsh web` 是 `web`）：
+插件已发布到 npm（[`@jimmyzm/dsh-billing-card`](https://www.npmjs.com/package/@jimmyzm/dsh-billing-card)），是一个 DSH bundle。`--profile` 写你实际在跑的 profile（桌面应用是 `desktop`，`dsh web` 是 `web`）：
 
 ```bash
 dsh plugin --profile web add @jimmyzm/dsh-billing-card

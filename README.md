@@ -8,6 +8,7 @@
 *DeepSeek balance, live unit prices and the billing window, in your DSH sidebar*
 
 ![Platform](https://img.shields.io/badge/platform-web-blueviolet?style=flat-square)
+[![npm](https://img.shields.io/npm/v/@jimmyzm/dsh-billing-card?style=flat-square)](https://www.npmjs.com/package/@jimmyzm/dsh-billing-card)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](LICENSE)
 
 **English** · [简体中文](README.zh-CN.md)
@@ -50,7 +51,7 @@ Real renders, 256 px sidebar at 2× density.
 
 ## Installation
 
-The package is published on npm as a DSH bundle. Use the profile you actually run (`desktop` for the desktop app, `web` for `dsh web`):
+The package is published on npm ([`@jimmyzm/dsh-billing-card`](https://www.npmjs.com/package/@jimmyzm/dsh-billing-card)) as a DSH bundle. Use the profile you actually run (`desktop` for the desktop app, `web` for `dsh web`):
 
 ```bash
 dsh plugin --profile web add @jimmyzm/dsh-billing-card
