@@ -118,7 +118,7 @@ function makeHost(present, sink = warnings) {
   };
 }
 
-function answer(route, method) {
+function answer(route, method, url) {
   return new Promise((resolve) => {
     const response = {
       writeHead(status, headers) {
@@ -129,7 +129,7 @@ function answer(route, method) {
         resolve({ status: this.status, headers: this.headers, body });
       },
     };
-    route.handler({ method }, response);
+    route.handler({ method, url }, response);
   });
 }
 
@@ -202,6 +202,43 @@ for (let attempt = 0; attempt < 40 && failed.status === 'loading'; attempt += 1)
 check('a broken balance is reported per source', failed.sources.deepseek, 'failed');
 check('and the rest of the payload still loaded', failed.status, 'ready');
 check('the price tables survive it', failed.prices.CNY.models['deepseek-flash'].idle.input, 1);
+// A Client that switched to the open-platform provider asks for a fresh amount;
+// the route answers at once and the re-read continues behind it.
+const balanceUrl = 'https://api.deepseek.com/user/balance';
+upstream[balanceUrl] = JSON.stringify({
+  is_available: true,
+  balance_infos: [{ currency: 'CNY', total_balance: '99.00', granted_balance: '9.00', topped_up_balance: '90.00' }],
+});
+const beforeRefresh = seen.filter((call) => call.url === balanceUrl).length;
+await answer(keyed.routes[0], 'GET', '/deepseek-billing-card/data?balance=refresh');
+let refreshed = JSON.parse((await answer(keyed.routes[0], 'GET')).body);
+for (let attempt = 0; attempt < 40 && refreshed.deepseek.total === '110.00'; attempt += 1) {
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  refreshed = JSON.parse((await answer(keyed.routes[0], 'GET')).body);
+}
+check('an asked-for refresh re-reads the balance', refreshed.deepseek.total, '99.00');
+check(
+  'and it costs one upstream request',
+  seen.filter((call) => call.url === balanceUrl).length,
+  beforeRefresh + 1,
+);
+// A burst of asks inside the gap is still one read.
+await answer(keyed.routes[0], 'GET', '/deepseek-billing-card/data?balance=refresh');
+await new Promise((resolve) => setTimeout(resolve, 60));
+check(
+  'two asks in a burst cost one read',
+  seen.filter((call) => call.url === balanceUrl).length,
+  beforeRefresh + 1,
+);
+// A plain read never re-reads: the periodic tick is a read, not a refresh.
+await answer(keyed.routes[0], 'GET');
+await new Promise((resolve) => setTimeout(resolve, 40));
+check(
+  'a plain read does not re-read the balance',
+  seen.filter((call) => call.url === balanceUrl).length,
+  beforeRefresh + 1,
+);
+
 delete process.env.DEEPSEEK_API_KEY;
 
 const get = await answer(routes[0], 'GET');

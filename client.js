@@ -26,6 +26,20 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const { Fragment, createElement: h } = React;
     const { useEffect, useMemo, useRef, useState } = React;
+    // The DSH tooltip primitive lives in the platform seed, so a real shell always
+    // has it; the offline harness has no module table, and the card falls back to
+    // the native title attribute there so the suite keeps running unchanged.
+    let Tooltip = null;
+    try {
+      const primitives = require('@deepseek-ai/dsh-client-ui-primitives');
+      // A component may be a plain function or a forwardRef/memo object.
+      const candidate = primitives === null || typeof primitives !== 'object' ? null : primitives.Tooltip;
+      if (typeof candidate === 'function' || (candidate !== null && typeof candidate === 'object')) {
+        Tooltip = candidate;
+      }
+    } catch {
+      Tooltip = null;
+    }
     /** Reads layout before paint; the harness React stub only carries useEffect. */
     const useLayoutEffect = typeof React.useLayoutEffect === 'function' ? React.useLayoutEffect : useEffect;
 
@@ -48,14 +62,32 @@ window.__ModuleLoader__.load({
     function billsAtListPrice(provider) {
       return provider === null || (typeof provider === 'string' && OFFICIAL_PROVIDERS.has(provider.toLowerCase()));
     }
+
+    /**
+     * Which balance the card headlines. Only the open platform bills the API key, so
+     * every other provider -- an unknown one, and a composer with no model at all --
+     * moves the account balance to the headline.
+     */
+    function billsOnOpenPlatform(provider) {
+      return typeof provider === 'string' && provider.toLowerCase() === 'deepseek-official';
+    }
     /** While the Host half is still fetching, the card asks again on this cadence. */
     const DATA_POLL_MS = 3000;
+    /** How often a requested balance refresh is followed up, in milliseconds. */
+    const BALANCE_ASK_MS = 1000;
+    /** How many follow-ups a requested balance refresh gets. */
+    const BALANCE_ASK_LIMIT = 2;
     /** Bounded so a Host that is still fetching stops being asked. */
     const DATA_POLL_LIMIT = 10;
     /** A route that is not there yet gets this many tries before the snapshot wins. */
     const DATA_FAIL_LIMIT = 3;
     /** Gap the card keeps under any action that precedes it in the footer row. */
     const ACTION_GAP_PX = 4;
+    /** Hover dwell before a tooltip appears; a focused control gets there faster. */
+    const TOOLTIP_DELAY_MS = 400;
+    const TOOLTIP_FOCUS_DELAY_MS = 150;
+    /** Widest the hover bubble gets, so a long sentence wraps instead of running across. */
+    const TOOLTIP_MAX_WIDTH = 248;
 
     //#region dictionaries
     /** Simplified Chinese dictionary (the key-set source of truth). */
@@ -63,14 +95,18 @@ window.__ModuleLoader__.load({
       'card.title': 'DeepSeek 余额',
       'card.balance.loading': '读取中',
       'card.balance.failed': '读取失败',
-      'card.balance.signedOut': '未登录',
       'card.balance.tiny': '不足 0.01',
+      'card.balance.signedOut': '未登录',
       'card.title.api': 'DeepSeek API 余额',
       'card.balance.hint': 'DSH 账号余额，每 30 秒刷新',
       'card.balance.hint.api': 'DeepSeek 开放平台余额（API Key），每 30 秒刷新',
-      'card.balance.line.api': 'DeepSeek API',
       'card.balance.api.missing': '未配置 API Key',
       'card.balance.api.failed': '读取失败，稍后重试',
+      'card.balance.granted': '赠金',
+      'card.balance.toppedUp': '充值',
+      'card.balance.total': '合计',
+      'card.balance.signedOutMissing': '未登录，且未配置 API Key',
+      'card.balance.signedOutFailed': '未登录，API 余额读取失败',
       'card.balance.hintBonus': 'DSH 账号余额（充值 + 赠金合计），每 30 秒刷新',
       'card.bonus': '赠送',
       'card.period.idle': '空闲',
@@ -90,7 +126,6 @@ window.__ModuleLoader__.load({
       'card.snapshot.builtin': '内置快照',
       'card.schedule.source': '节假日依据 iCloud 中国大陆节假日日历，启动时更新',
       'card.schedule.builtin': '节假日依据内置表',
-      'card.holiday.tooltip': '法定节假日（休）',
       'card.holiday.banner': '假期中',
       'card.makeup': '调休',
       'card.makeup.tooltip': '调休工作日（班）',
@@ -106,14 +141,18 @@ window.__ModuleLoader__.load({
       'card.title': 'DeepSeek balance',
       'card.balance.loading': 'Reading',
       'card.balance.failed': 'Unavailable',
-      'card.balance.signedOut': 'Signed out',
       'card.balance.tiny': 'under 0.01',
+      'card.balance.signedOut': 'Signed out',
       'card.title.api': 'DeepSeek API balance',
       'card.balance.hint': 'DSH account balance, refreshed every 30 seconds',
       'card.balance.hint.api': 'DeepSeek platform balance for the API key, refreshed every 30 s',
-      'card.balance.line.api': 'DeepSeek API',
       'card.balance.api.missing': 'No API key',
       'card.balance.api.failed': 'read failed, retrying',
+      'card.balance.granted': 'Bonus',
+      'card.balance.toppedUp': 'Topped up',
+      'card.balance.total': 'Total',
+      'card.balance.signedOutMissing': 'Not signed in, and no API key configured',
+      'card.balance.signedOutFailed': 'Not signed in; the API balance could not be read',
       'card.balance.hintBonus': 'DSH account balance, recharge plus bonus, refreshed every 30 seconds',
       'card.bonus': 'Bonus',
       'card.period.idle': 'Idle',
@@ -133,7 +172,6 @@ window.__ModuleLoader__.load({
       'card.snapshot.builtin': 'built-in snapshot',
       'card.schedule.source': 'holidays from the iCloud China mainland calendar, synced at startup',
       'card.schedule.builtin': 'holidays from the built-in table',
-      'card.holiday.tooltip': 'Statutory holiday',
       'card.holiday.banner': ' holiday in progress',
       'card.makeup': 'Make-up',
       'card.makeup.tooltip': 'Make-up workday',
@@ -557,7 +595,7 @@ window.__ModuleLoader__.load({
 
     //#region card styles
     const CARD_CSS = [
-      '.dbc-root{box-sizing:border-box;display:flex;flex-direction:column;flex:0 0 100%;min-width:0;order:10;margin-bottom:6px}',
+      '.dbc-root{box-sizing:border-box;display:flex;flex-direction:column;flex:0 0 100%;min-width:0;order:10;margin-bottom:6px;user-select:none;-webkit-user-select:none}',
       '.dbc-card{box-sizing:border-box;display:flex;flex-direction:column;gap:5px;min-width:0;padding:8px 10px 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:12px;line-height:16px;font-variant-numeric:tabular-nums}',
       '.dbc-head,.dbc-status,.dbc-model{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}',
       '.dbc-status{align-items:center;flex-wrap:wrap;justify-content:flex-start;row-gap:2px}',
@@ -571,7 +609,7 @@ window.__ModuleLoader__.load({
       '.dbc-chip-peak{color:var(--dsw-alias-state-warn-primary);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 14%,transparent)}',
       '.dbc-holiday{display:flex;align-items:center;gap:4px;margin:-8px -10px 0;padding:3px 10px 4px;border-radius:9px 9px 0 0;background:color-mix(in srgb,var(--dsw-alias-button-info-fill,var(--dsw-alias-label-secondary)) 10%,transparent);color:var(--dsw-alias-button-info-fill,var(--dsw-alias-label-secondary));font-size:11px;line-height:15px;overflow:hidden}',
       '.dbc-holiday-icon{flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}',
-      '.dbc-holiday-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.dbc-holiday-text{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.dbc-chip-makeup{color:var(--dsw-alias-label-secondary);background:color-mix(in srgb,var(--dsw-alias-label-secondary) 12%,transparent)}',
       '.dbc-dot{width:5px;height:5px;border-radius:50%;background:currentColor}',
       '.dbc-countdown{flex:0 1 auto;min-width:0;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:14px;color:var(--dsw-alias-label-secondary)}',
@@ -582,6 +620,17 @@ window.__ModuleLoader__.load({
       '.dbc-price{display:flex;flex-direction:column;min-width:0}',
       '.dbc-price-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:12px;color:var(--dsw-alias-label-secondary)}',
       '.dbc-price-value{white-space:nowrap;font-size:12px;line-height:15px;font-weight:600}',
+      '.dbc-tip-trigger{cursor:help;text-decoration:underline dotted;text-decoration-color:color-mix(in srgb,currentColor 42%,transparent);text-underline-offset:2px}',
+      '.dbc-tip{display:flex;flex-direction:column;gap:4px;max-width:232px;padding:4px 6px;white-space:normal;text-align:left;color:inherit;user-select:none;-webkit-user-select:none}',
+      '.dbc-tip-title{font-size:12.5px;line-height:17px;font-weight:600}',
+      '.dbc-tip-row{display:flex;align-items:center;gap:6px;min-width:0}',
+      '.dbc-tip-badge{flex:0 0 auto;padding:0 5px;border-radius:4px;font-size:10.5px;line-height:15px;font-weight:600;color:inherit}',
+      '.dbc-tip-badge-ok{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 36%,transparent)}',
+      '.dbc-tip-badge-warn{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 38%,transparent)}',
+      '.dbc-tip-badge-total{background:color-mix(in srgb,currentColor 20%,transparent)}',
+      '.dbc-tip-amount{margin-left:auto;font-size:11.5px;line-height:16px;font-weight:500;font-variant-numeric:tabular-nums}',
+      '.dbc-tip-line{font-size:11.5px;line-height:16px;opacity:.88;white-space:pre-line}',
+      '.dbc-tip-note{font-size:11px;line-height:16px;opacity:.72;white-space:pre-line}',
     ].join('');
     //#endregion
 
@@ -629,6 +678,7 @@ window.__ModuleLoader__.load({
       api.current.readBalance = props.readBalance;
       api.current.readModel = props.readModel;
       api.current.watchSelection = props.watchSelection;
+      api.current.watchUpstream = props.watchUpstream;
 
       useEffect(() => {
         if (!wide || typeof every !== 'function') return undefined;
@@ -644,6 +694,7 @@ window.__ModuleLoader__.load({
         if (!wide) return undefined;
         const readers = api.current;
         if (typeof readers.watchSelection !== 'function') return undefined;
+        let lastProvider = null;
         return readers.watchSelection((next) => {
           setSelection(next);
           if (typeof readers.readBalance === 'function') {
@@ -653,7 +704,26 @@ window.__ModuleLoader__.load({
             );
           }
           const refresh = api.current.refreshRoute;
-          if (typeof refresh === 'function') refresh();
+          if (typeof refresh !== 'function') return;
+          // A different provider may bill a different balance, and the Host only
+          // re-reads that balance on its own timer: ask for a fresh amount now so
+          // the switch lands at once instead of at the next minute boundary.
+          const provider = next === null || typeof next.provider !== 'string' ? null : next.provider;
+          refresh(provider !== lastProvider);
+          lastProvider = provider;
+        });
+      }, [wide]);
+
+      // A provider or credential change lands on the catalogue, not on the
+      // session's selection, so it needs its own trigger: ask the Host for a fresh
+      // open-platform amount the moment the provider surface moves.
+      useEffect(() => {
+        if (!wide) return undefined;
+        const readers = api.current;
+        if (typeof readers.watchUpstream !== 'function') return undefined;
+        return readers.watchUpstream(() => {
+          const refresh = api.current.refreshRoute;
+          if (typeof refresh === 'function') refresh(true);
         });
       }, [wide]);
 
@@ -674,26 +744,43 @@ window.__ModuleLoader__.load({
           const asking = next.status === 'loading' ? DATA_POLL_LIMIT : DATA_FAIL_LIMIT;
           if (next.status !== 'ready' && attempts < asking) timer = setTimeout(ask, DATA_POLL_MS);
         };
-        const ask = () => {
+        let follow = null;
+        let followed = 0;
+        const ask = (fresh) => {
           if (typeof fetch !== 'function') return;
-          fetch(DATA_ENDPOINT, { headers: { accept: 'application/json' }, cache: 'no-store' })
+          const url = fresh === true ? DATA_ENDPOINT + '?balance=refresh' : DATA_ENDPOINT;
+          fetch(url, { headers: { accept: 'application/json' }, cache: 'no-store' })
             .then((response) => (response.ok ? response.json() : null))
-            .then((payload) => settle(readRemote(payload)))
+            .then((payload) => {
+              const next = readRemote(payload);
+              settle(next);
+              // The Host answers before it finishes the requested re-read, so a
+              // balance that is not ready yet gets a couple of quick follow-ups
+              // rather than waiting for the next thirty-second tick.
+              const pending = next.status === 'ready' && next.deepseek !== null && next.deepseek.status !== 'ready';
+              if (fresh !== true || !pending || followed >= BALANCE_ASK_LIMIT) return;
+              followed += 1;
+              if (follow !== null) clearTimeout(follow);
+              follow = setTimeout(() => ask(true), BALANCE_ASK_MS);
+            })
             .catch(() => settle({ status: 'failed', prices: null, holidays: null }));
         };
         ask();
-        // The Host re-reads the open-platform balance once a minute, and that
+        // The Host re-reads the open-platform balance every thirty seconds, and that
         // balance is the only thing on this route that changes while the app
         // runs. The 30 s tick below therefore re-reads the route too, so a card
         // that loaded before a key was configured (or before the first balance
         // arrived) picks the amount up instead of freezing on "no API key".
-        api.current.refreshRoute = () => {
-          if (live) ask();
+        api.current.refreshRoute = (fresh) => {
+          if (!live) return;
+          if (fresh === true) followed = 0;
+          ask(fresh === true);
         };
         return () => {
           live = false;
           api.current.refreshRoute = null;
           if (timer !== null) clearTimeout(timer);
+          if (follow !== null) clearTimeout(follow);
         };
       }, [wide]);
 
@@ -824,6 +911,7 @@ window.__ModuleLoader__.load({
       // other provider is billed by that provider, so quoting a list price there
       // would be an invented number.
       const official = billsAtListPrice(activeProvider);
+      const apiPreferred = billsOnOpenPlatform(activeProvider);
       const priced = useMemo(() => {
         if (activeId === null) return null;
         const found = lookupPrice([activeId, activeName], rates);
@@ -860,103 +948,139 @@ window.__ModuleLoader__.load({
       // a day that is a holiday cannot also be a day you work to make up for it.
       const makeupName =
         !calendar.days.has(today) && chinese ? named(calendar.makeupNames, today) : null;
-      const holidayTitle =
-        holidayName === null ? undefined : tr('card.holiday.tooltip') + ' · ' + holidayName + ' · ' + holidaySource;
       // The banner reads "国庆节假期中", and joins two occasions with a spaced "&".
       const holidayBanner =
         holidayName === null ? null : holidayName.split('、').join(' & ') + tr('card.holiday.banner');
       const makeupTitle =
         makeupName === null
           ? undefined
-          : tr('card.makeup.tooltip') +
-            ' · ' +
-            makeupName +
-            ' · ' +
-            tr('card.makeup.billing') +
-            ' · ' +
-            holidaySource;
+          : {
+              title: '🔁 ' + tr('card.makeup') + ' · ' + makeupName,
+              rows: [],
+              note: tr('card.makeup.tooltip') + ' ' + tr('card.makeup.billing'),
+            };
 
-      // Balance line: an amount when one is readable, otherwise the reason.
-      //
-      // Two accounts pay for models here: the DSH account (which bills the
-      // `deepseek-account` models) and the DeepSeek open platform behind an API
-      // key (which bills the `deepseek-official` provider). The account balance
-      // is the default and the fallback; the API balance takes over only while a
-      // model from the API-key provider is selected.
-      const apiBalance = remote.deepseek;
-      const apiReady = apiBalance !== null && apiBalance !== undefined && apiBalance.status === 'ready';
-      const apiPreferred = activeProvider === 'deepseek-official' && apiReady;
+      // Two balances, one headline. The provider decides which one is the truth:
+      // DeepSeek's own provider bills the open platform, every other provider is
+      // billed by the DSH account. A signed-out account has nothing to report, so
+      // the API balance stands in — real money beats a notice. Only when neither
+      // source can answer does the headline become that notice.
       let balanceMain = null;
-      let balanceNote = tr('card.balance.loading');
-      let balanceHint = apiPreferred ? tr('card.balance.hint.api') : tr('card.balance.hint');
-      const walletLines = [];
+      let balanceNote = null;
+      let balanceHint = null;
+      let titleKey = 'card.title';
+
+      const apiBalance = remote.deepseek;
+      const apiState = apiBalance === null || apiBalance === undefined ? 'absent' : apiBalance.status;
       // A non-Chinese card quotes dollar prices, so its balance carries the ISO
       // code next to the symbol: no reader mistakes `¥` for a rendering bug.
       const code = spellsCurrency(locale);
-      if (account.kind === 'ready') {
-        const amountLine = (wallet, prefix) => {
-          const symbol = CURRENCY_SYMBOL[wallet.currency] || '';
-          const text = formatAmount(wallet.balance, amount);
-          return prefix + wallet.currency + ' ' + symbol + (text === null ? tr('card.balance.tiny') : text);
-        };
-        for (const wallet of account.wallets) walletLines.push(amountLine(wallet, ''));
-        for (const wallet of account.bonus) walletLines.push(amountLine(wallet, tr('card.bonus') + ' '));
+      /** One balance amount, unit included: `CNY ¥18.12`, `¥不足 0.01`. */
+      const walletMoney = (currency, value) => {
+        const symbol = CURRENCY_SYMBOL[currency] || '';
+        const text = formatAmount(value, amount);
+        return currency + ' ' + symbol + (text === null ? tr('card.balance.tiny') : text);
+      };
+      /** The headline keeps the symbol; a sub-cent amount has only its unit to show. */
+      const headline = (currency, value) => {
+        const symbol = CURRENCY_SYMBOL[currency] || '';
+        const text = formatAmount(value, amount);
+        if (text === null) {
+          return { note: code ? currency + ' ' + tr('card.balance.tiny') : symbol + tr('card.balance.tiny') };
+        }
+        return { main: { code: code ? currency : null, text: symbol + text } };
+      };
+      /** Puts the open-platform balance on the headline, from whatever state it is in. */
+      const showApi = () => {
+        titleKey = 'card.title.api';
+        if (apiState !== 'ready') return;
+        // Composition, cadence, total — in that order, and nothing else: the tooltip
+        // describes the balance that is actually on the headline.
+        const granted = formatAmount(apiBalance.granted, amount);
+        const toppedUp = formatAmount(apiBalance.toppedUp, amount);
+        const rows = [];
+        if (toppedUp !== null) {
+          rows.push({
+            tone: 'ok',
+            badge: tr('card.balance.toppedUp'),
+            text: walletMoney(apiBalance.currency, apiBalance.toppedUp),
+          });
+        }
+        if (granted !== null) {
+          rows.push({
+            tone: 'warn',
+            badge: tr('card.balance.granted'),
+            text: walletMoney(apiBalance.currency, apiBalance.granted),
+          });
+        }
+        rows.push({ tone: 'total', badge: tr('card.balance.total'), text: walletMoney(apiBalance.currency, apiBalance.total) });
+        balanceHint = { title: '💰 ' + tr('card.title.api'), rows, note: tr('card.balance.hint.api') };
+        const shaped = headline(apiBalance.currency, apiBalance.total);
+        if (shaped.main !== undefined) balanceMain = shaped.main;
+        else balanceNote = shaped.note;
+      };
+
+      /** Puts the account wallet total on the headline. */
+      const showAccount = () => {
+        titleKey = 'card.title';
         const total = totalBalance(account.wallets, account.bonus);
         if (total === null) {
           balanceNote = tr('card.balance.failed');
-        } else {
-          const symbol = CURRENCY_SYMBOL[total.currency] || '';
-          const text = formatAmount(total.text, amount);
-          if (text === null) {
-            // Nothing but the unit fits: `¥不足 0.01` in Chinese, `CNY under 0.01` otherwise.
-            balanceNote = code ? total.currency + ' ' + tr('card.balance.tiny') : symbol + tr('card.balance.tiny');
-          } else {
-            // The headline keeps the symbol; a non-Chinese card also carries the
-            // ISO code, set small so the amount stays the loud part.
-            balanceMain = { code: code ? total.currency : null, text: symbol + text };
-          }
-          // The account hint describes the account amount; while the API balance
-          // leads, its own hint stays.
-          if (!apiPreferred) {
-            balanceHint = tr(total.includesBonus ? 'card.balance.hintBonus' : 'card.balance.hint');
-          }
+          return;
         }
+        // Wallets, then the sum: the tooltip lists exactly what the headline adds up.
+        const rows = [];
+        for (const wallet of account.wallets) {
+          rows.push({
+            tone: 'ok',
+            badge: tr('card.balance.toppedUp'),
+            text: walletMoney(wallet.currency, wallet.balance),
+          });
+        }
+        for (const wallet of account.bonus) {
+          rows.push({ tone: 'warn', badge: tr('card.bonus'), text: walletMoney(wallet.currency, wallet.balance) });
+        }
+        rows.push({ tone: 'total', badge: tr('card.balance.total'), text: walletMoney(total.currency, total.text) });
+        balanceHint = {
+          title: '💰 ' + tr('card.title'),
+          rows,
+          note: tr(total.includesBonus ? 'card.balance.hintBonus' : 'card.balance.hint'),
+        };
+        const shaped = headline(total.currency, total.text);
+        if (shaped.main !== undefined) balanceMain = shaped.main;
+        else balanceNote = shaped.note;
+      };
+
+      if (apiPreferred) {
+        // This session is billed by the open platform, so that balance is the only
+        // one that describes its spending.
+        if (apiState === 'ready') {
+          showApi();
+        } else if (apiState === 'absent') {
+          // An older Host has no balance route: fall back to what the card can see
+          // rather than claiming a key is missing.
+          if (account.kind === 'ready') showAccount();
+          else if (account.kind === 'loading') balanceNote = tr('card.balance.loading');
+          else balanceNote = tr(account.kind === 'signedOut' ? 'card.balance.signedOut' : 'card.balance.failed');
+        } else if (apiState === 'loading') {
+          // The route is still being asked; a missing key is not yet a fact.
+          balanceNote = tr('card.balance.loading');
+        } else {
+          balanceNote = apiState === 'failed' ? tr('card.balance.api.failed') : tr('card.balance.api.missing');
+        }
+      } else if (account.kind === 'ready') {
+        showAccount();
       } else if (account.kind === 'signedOut') {
-        balanceNote = tr('card.balance.signedOut');
-      } else if (account.kind === 'failed') {
+        // No account session: the API balance is the only money the card can report.
+        if (apiState === 'ready') showApi();
+        else if (apiState === 'absent' || apiState === 'loading') balanceNote = tr('card.balance.signedOut');
+        else if (apiState === 'failed') balanceNote = tr('card.balance.signedOutFailed');
+        else balanceNote = tr('card.balance.signedOutMissing');
+      } else if (account.kind === 'loading') {
+        balanceNote = tr('card.balance.loading');
+      } else {
         balanceNote = tr('card.balance.failed');
       }
-      if (apiReady) {
-        const symbol = CURRENCY_SYMBOL[apiBalance.currency] || '';
-        const total = formatAmount(apiBalance.total, amount);
-        const granted = formatAmount(apiBalance.granted, amount);
-        const toppedUp = formatAmount(apiBalance.toppedUp, amount);
-        // The split is informational: granted credit plus what was topped up.
-        const split = granted === null || toppedUp === null ? '' : ' (' + granted + ' + ' + toppedUp + ')';
-        walletLines.push(
-          tr('card.balance.line.api') +
-            ': ' +
-            apiBalance.currency +
-            ' ' +
-            symbol +
-            (total === null ? tr('card.balance.tiny') : total) +
-            split,
-        );
-        if (apiPreferred) {
-          if (total === null) {
-            balanceNote = code ? apiBalance.currency + ' ' + tr('card.balance.tiny') : symbol + tr('card.balance.tiny');
-          } else {
-            balanceMain = { code: code ? apiBalance.currency : null, text: symbol + total };
-          }
-        }
-      } else if (apiBalance !== null && apiBalance !== undefined && apiBalance.status === 'unavailable') {
-        walletLines.push(tr('card.balance.line.api') + ': ' + tr('card.balance.api.missing'));
-      } else if (apiBalance !== null && apiBalance !== undefined && apiBalance.status === 'failed') {
-        // A key is configured but the read did not land. The headline stays the
-        // account balance: an unreadable balance is not a zero balance.
-        walletLines.push(tr('card.balance.line.api') + ': ' + tr('card.balance.api.failed'));
-      }
-      const balanceTitle = [balanceHint].concat(walletLines).join('\n');
 
       // Countdown to the next period switch.
       let countdown = null;
@@ -969,6 +1093,11 @@ window.__ModuleLoader__.load({
 
       const modelLabel =
         activeId !== null ? (activeName !== null ? activeName : activeId) : model.kind === 'failed' ? '—' : tr('card.balance.loading');
+      const modelTitle = {
+        title: '🏷️ ' + modelLabel,
+        rows: [],
+        note: activeId === null ? unitTitle : activeId + ' · ' + unitTitle,
+      };
       const priceValues =
         official && priced !== null && priced.entry !== null
           ? [
@@ -977,6 +1106,86 @@ window.__ModuleLoader__.load({
               ['card.price.output', priced.entry[tier].output],
             ]
           : null;
+
+      /**
+       * Builds the hover body: a title line, one line per fact, and a footnote.
+       * Wallet lines carry a colored badge, so a glance says which kind of money
+       * a number is; the bubble is capped so long sentences wrap.
+       */
+      const tipBody = (spec) => {
+        const body = typeof spec === 'string' ? { title: spec, rows: [], note: null } : spec;
+        const rows = body.rows || [];
+        return h(
+          'span',
+          { className: 'dbc-tip' },
+          h('span', { key: 'title', className: 'dbc-tip-title' }, body.title),
+          rows.map((row, index) =>
+            h(
+              'span',
+              { key: 'row' + index, className: 'dbc-tip-row' },
+              row.badge ? h('span', { className: 'dbc-tip-badge dbc-tip-badge-' + row.tone }, row.badge) : null,
+              h('span', { className: row.badge ? 'dbc-tip-amount' : 'dbc-tip-line' }, row.text),
+            ),
+          ),
+          body.note ? h('span', { key: 'note', className: 'dbc-tip-note' }, body.note) : null,
+        );
+      };
+
+      /**
+       * Wraps a node in the DSH tooltip after a short hover delay; without the
+       * primitive -- the offline harness -- the native title attribute stays.
+       */
+      const tip = (node, spec) => {
+        const title = spec === null || spec === undefined ? '' : typeof spec === 'string' ? spec : spec.title;
+        if (title === '') return node;
+        if (Tooltip === null) {
+          const text =
+            typeof spec === 'string'
+              ? spec
+              : [spec.title]
+                  .concat((spec.rows || []).map((row) => (row.badge ? row.badge + ' ' + row.text : row.text)))
+                  .concat(spec.note ? [spec.note] : [])
+                  .join('\n');
+          return h(node.tag, Object.assign({}, node.props, { title: text }), node.children);
+        }
+        return h(Tooltip, {
+          label: tipBody(spec),
+          side: 'top',
+          align: 'start',
+          maxWidth: TOOLTIP_MAX_WIDTH,
+          delayMs: TOOLTIP_DELAY_MS,
+          focusDelayMs: TOOLTIP_FOCUS_DELAY_MS,
+        }, node);
+      };
+
+      const balanceBody =
+        balanceMain === null
+          ? h('span', { className: 'dbc-note' }, balanceNote)
+          : h(
+              'span',
+              { className: 'dbc-balance' },
+              balanceMain.code === null ? null : h('span', { className: 'dbc-code' }, balanceMain.code + ' '),
+              balanceMain.text,
+            );
+      const pricedNode =
+        priceValues === null
+          ? h(
+              'div',
+              { className: 'dbc-note' },
+              tr(official || priced === null || priced.entry === null ? 'card.price.unknown' : 'card.price.otherProvider'),
+            )
+          : h(
+              'div',
+              { className: 'dbc-prices' },
+              priceValues.map((row) =>
+                h(
+                  'div',
+                  { key: row[0], className: 'dbc-price' },
+                  h('span', { className: 'dbc-price-label' }, tr(row[0])),
+                  h('span', { className: 'dbc-price-value' }, price.format(row[1])),
+                ),
+              ),
+            );
 
       return h(
         Fragment,
@@ -992,24 +1201,18 @@ window.__ModuleLoader__.load({
               ? null
               : h(
                   'div',
-                  { className: 'dbc-holiday', title: holidayTitle },
+                  { className: 'dbc-holiday' },
                   holidayIcon(),
                   h('span', { className: 'dbc-holiday-text' }, holidayBanner),
                 ),
+            // The trigger is the label, not the row: hovering a number should never
+            // open an explanation, and a row-wide anchor makes the bubble sit flat
+            // against the card edge instead of hanging off the word it explains.
             h(
               'div',
               { className: 'dbc-head' },
-              h('span', { className: 'dbc-title', title: balanceHint }, tr(apiPreferred ? 'card.title.api' : 'card.title')),
-              balanceMain === null
-                ? h('span', { className: 'dbc-note', title: balanceTitle }, balanceNote)
-                : h(
-                    'span',
-                    { className: 'dbc-balance', title: balanceTitle },
-                    balanceMain.code === null
-                      ? null
-                      : h('span', { className: 'dbc-code' }, balanceMain.code + ' '),
-                    balanceMain.text,
-                  ),
+              tip(h('span', { className: 'dbc-title dbc-tip-trigger' }, tr(titleKey)), balanceHint),
+              balanceBody,
             ),
             h(
               'div',
@@ -1017,15 +1220,22 @@ window.__ModuleLoader__.load({
               h(
                 'span',
                 { className: 'dbc-chips' },
-                h(
-                  'span',
-                  { className: 'dbc-chip dbc-chip-' + tier, title: tr('card.schedule') + ' · ' + holidaySource },
-                  h('span', { className: 'dbc-dot', 'aria-hidden': 'true' }),
-                  tr(peak ? 'card.period.peak' : 'card.period.idle'),
+                tip(
+                  h(
+                    'span',
+                    { className: 'dbc-chip dbc-chip-' + tier },
+                    h('span', { className: 'dbc-dot', 'aria-hidden': 'true' }),
+                    tr(peak ? 'card.period.peak' : 'card.period.idle'),
+                  ),
+                  {
+                    title: '⏱️ ' + tr(peak ? 'card.period.peak' : 'card.period.idle'),
+                    rows: [],
+                    note: tr('card.schedule') + ' · ' + holidaySource,
+                  },
                 ),
                 makeupName === null
                   ? null
-                  : h('span', { className: 'dbc-chip dbc-chip-makeup', title: makeupTitle }, tr('card.makeup')),
+                  : tip(h('span', { className: 'dbc-chip dbc-chip-makeup' }, tr('card.makeup')), makeupTitle),
               ),
               countdown === null ? null : h('span', { className: 'dbc-countdown' }, countdown),
             ),
@@ -1033,34 +1243,10 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { className: 'dbc-model' },
-              h(
-                'span',
-                {
-                  className: 'dbc-model-name',
-                  title: activeId === null ? undefined : [activeName, activeId].filter(Boolean).join(' · '),
-                },
-                modelLabel,
-              ),
-              h('span', { className: 'dbc-tier', title: unitTitle }, unit),
+              tip(h('span', { className: 'dbc-model-name dbc-tip-trigger' }, modelLabel), modelTitle),
+              h('span', { className: 'dbc-tier' }, unit),
             ),
-            priceValues === null
-              ? h(
-                  'div',
-                  { className: 'dbc-note', title: unitTitle },
-                  tr(official || priced === null || priced.entry === null ? 'card.price.unknown' : 'card.price.otherProvider'),
-                )
-              : h(
-                  'div',
-                  { className: 'dbc-prices', title: unitTitle },
-                  priceValues.map((row) =>
-                    h(
-                      'div',
-                      { key: row[0], className: 'dbc-price' },
-                      h('span', { className: 'dbc-price-label' }, tr(row[0])),
-                      h('span', { className: 'dbc-price-value' }, price.format(row[1])),
-                    ),
-                  ),
-                ),
+            pricedNode,
           ),
         ),
       );
@@ -1408,6 +1594,41 @@ window.__ModuleLoader__.load({
       };
     }
 
+    /**
+     * Follows the provider catalogue and the credential records.
+     *
+     * Adding a provider, switching the default, or pasting a key all change which
+     * balance pays for the next turn, and none of them touches the visible
+     * session's model selection. The Host re-reads the open-platform balance on
+     * its own timer, so without this the card would keep showing the previous
+     * answer until the next tick; the handler asks for a fresh one instead.
+     * @param ctx - client root context.
+     * @param onChange - called whenever the provider surface changed.
+     * @returns a disposer that stops every subscription.
+     */
+    function watchUpstream(ctx, onChange) {
+      const remote = ctx.remote;
+      if (remote === undefined || remote === null || typeof remote.$on !== 'function') return () => {};
+      const events = [
+        'llm/adapters-updated',
+        'settings/document-updated',
+        'credentials/record-updated',
+        'credentials/reference-updated',
+      ];
+      const stops = [];
+      for (const event of events) {
+        try {
+          const stop = remote.$on(event, () => onChange());
+          if (typeof stop === 'function') stops.push(stop);
+        } catch {
+          // An event this build does not publish is simply not followed.
+        }
+      }
+      return () => {
+        for (const stop of stops) stop();
+      };
+    }
+
     /** Registers the card's dictionaries, readers and footer entry. */
     function apply(ctx) {
       ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-billing-card: dictionaries');
@@ -1428,6 +1649,7 @@ window.__ModuleLoader__.load({
               readBalance: () => readBalance(ctx),
               readModel: () => readModel(ctx),
               watchSelection: (handler) => watchSelection(ctx, handler),
+              watchUpstream: (handler) => watchUpstream(ctx, handler),
             }),
           },
           BillingCard,

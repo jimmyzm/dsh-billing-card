@@ -67,15 +67,21 @@ function warn(ctx, area, error) {
 /**
  * Answers the Client half with whatever this start found.
  * @param state - the shared startup result.
+ * @param refreshed - re-reads the open-platform balance, at most once per burst.
  * @returns the request handler.
  */
-function dataHandler(state) {
+function dataHandler(state, refreshed) {
   return (request, response) => {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       response.writeHead(405, { allow: 'GET, HEAD' });
       response.end();
       return;
     }
+    // `?balance=refresh` lets the Client ask for a fresh amount when it switches
+    // to the provider that bills the open platform. The answer is the state as
+    // it is now: the re-read continues in the background, and the Client asks
+    // again a moment later, so the route never waits for the network.
+    if (typeof request.url === 'string' && request.url.includes('balance=refresh')) refreshed();
     const body = JSON.stringify(state);
     response.writeHead(200, {
       'content-type': 'application/json; charset=utf-8',
@@ -187,6 +193,28 @@ export function apply(ctx) {
     }
   }
 
+  /** Set while a requested re-read runs, so a burst of asks costs one request. */
+  let balanceRead = null;
+  /** When the last requested re-read started, to keep them apart. */
+  let balanceAskedAt = 0;
+  /** The shortest gap between two requested re-reads, in milliseconds. */
+  const BALANCE_ASK_GAP_MS = 3000;
+
+  /**
+   * Re-reads the open-platform balance for a Client that asked for it.
+   * @returns a promise that settles when the read does.
+   */
+  function refreshBalance() {
+    if (balanceRead !== null) return balanceRead;
+    const now = Date.now();
+    if (now - balanceAskedAt < BALANCE_ASK_GAP_MS) return Promise.resolve();
+    balanceAskedAt = now;
+    balanceRead = loadDeepseekBalance().finally(() => {
+      balanceRead = null;
+    });
+    return balanceRead;
+  }
+
   async function load() {
     const [tables, holidays] = await Promise.all([
       Promise.all(CURRENCIES.map((currency) => loadPrices(currency))),
@@ -228,7 +256,7 @@ export function apply(ctx) {
   // a server is there and disappears with it.
   ctx.inject(['webServer'], (http) => {
     http.effect(
-      () => http.webServer.register({ kind: 'exact', path: DATA_PATH, handler: dataHandler(state) }),
+      () => http.webServer.register({ kind: 'exact', path: DATA_PATH, handler: dataHandler(state, () => void refreshBalance()) }),
       'dsh-billing-card: data route',
     );
   });
