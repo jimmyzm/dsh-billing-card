@@ -20,12 +20,7 @@
 
 </div>
 
-DSH（DeepSeek Harness）侧边栏底部的一张卡片：还剩多少额度、当前选中模型此刻多少钱、这一刻是高峰还是空闲以及还有多久切换。
-
-价格来自 DeepSeek 官方文档，余额来自 DSH 账号服务；卡片不猜数据，抓不到就回退到内置副本。
-
-> [!TIP]
-> 卡片在启动时抓取一次，之后从内存作答，侧边栏里的任何刷新都不用等网络。
+DSH（DeepSeek Harness）侧边栏底部的一张卡片：余额、当前模型的档单价，以及当前计费时段和下次切换的倒计时。
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png" alt="假期中的卡片" width="320" />
@@ -33,40 +28,39 @@ DSH（DeepSeek Harness）侧边栏底部的一张卡片：还剩多少额度、�
 
 ## 功能
 
-- **余额** —— 充值钱包 + 赠金钱包，精确相加并按「分」截断，每个钱包的明细在悬停提示里。
-- **两个余额，一个主数字** —— DSH 账号余额为 `deepseek-account` 的模型计费，DeepSeek 开放平台余额（API Key）为 `deepseek-official` 提供商计费。主数字随输入框选中的提供商实时切换；账号余额是默认与兜底，没配 Key 时卡片不会变空。悬停提示区分这两种情况：没配 Key 显示「DeepSeek API: 未配置 API Key」，配了但读取失败显示「DeepSeek API: 读取失败，稍后重试」—— 读不到的余额不会被当成一个数字展示。
-- **选中模型的单价** —— 输入 / 缓存读取 / 输出，取当前生效的档位；在输入框换模型立即重绘。DeepSeek 模型若由非 DeepSeek 官方渠道提供，则不显示价格，因为那是该渠道自己的定价。
-- **计费时段与倒计时** —— 绿色「空闲」/ 黄色「高峰」，旁边是距切换的时间。
-- **假期与调休标记** —— 中文界面下节假日显示为卡片顶部的淡蓝色横条（`国庆节假期中`），调休上班日显示灰色「调休」标签。
-- **币种跟随界面语言** —— 中文报人民币，其余语言报美元；余额保持钱包自身币种。
-- **跟随应用** —— 亮暗主题、中英字典、数字格式随语言，数据不可用时静默回退。
+- **余额** —— DSH 账号余额（充值 + 赠金）或 API Key 对应的 DeepSeek 开放平台余额，按当前提供商的计费方式显示，随输入框切换。
+- **档单价** —— 当前模型在现行时段的输入、缓存读取、输出价格；其他渠道提供的模型不显示价格。
+- **计费时段** —— 绿色「空闲」/ 黄色「高峰」，旁边是下次切换的倒计时。
+- **假期标识**（中文界面）—— 假期显示蓝色横幅和假期名，调休日显示灰色「调休」标签。
+- **按界面语言计价** —— 中文界面人民币价，其他语言美元价。
+- **跟随应用** —— 明暗主题、中英文字典，抓不到上游数据时用内置数据。
 
 ## 截图
 
-真实渲染，256 px 侧边栏、2 倍像素密度。
+真实渲染，侧边栏 256 px、2× 密度。
 
-| 假期 —— `国庆节` | 调休工作日 —— `调休` |
+| 假期 —— `国庆节` | 调休日 —— `调休` |
 | --- | --- |
 | ![假期](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png) | ![调休](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/makeup-chip.png) |
 
-| 英文界面 / 美元价目 | 暗色主题 |
+| 英文界面、美元价 | 深色主题 |
 | --- | --- |
-| ![英文界面](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png) | ![暗色主题](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/dark-theme.png) |
+| ![英文界面](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png) | ![深色主题](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/dark-theme.png) |
 
 ## 安装
 
-插件已发布到 npm（[`@jimmyzm/dsh-billing-card`](https://npmx.dev/package/@jimmyzm/dsh-billing-card)），是一个 DSH bundle。`--profile` 写你实际在跑的 profile（桌面应用是 `desktop`，`dsh web` 是 `web`）：
+已发布到 npm（[`@jimmyzm/dsh-billing-card`](https://npmx.dev/package/@jimmyzm/dsh-billing-card)），是一个 DSH bundle。用你实际运行的 profile（桌面应用用 `desktop`，`dsh web` 用 `web`）：
 
 ```bash
 dsh plugin --profile web add @jimmyzm/dsh-billing-card
 ```
 
-等价于插件页里的「从 npm 安装」。装完刷新界面：卡片出现在侧边栏底部，侧边栏收起成图标栏时自动隐藏。
+等同于 DSH 插件页上的 **Install from npm**。装完刷新 GUI —— 卡片出现在侧边栏底部；侧边栏收成图标栏时卡片隐藏。
 
 > [!IMPORTANT]
-> 插件的 Host 半边只在应用启动时加载一次，所以**安装或升级后要重启一次应用**。在重启之前卡片用内置数据，布局一致，只是悬停提示写「内置快照」。
+> 插件的 Host 半边每次启动只加载一次，所以**安装或升级后要重启一次应用**。重启之前卡片用内置数据。
 
-依赖带 Web GUI、侧边栏底槽位与账号服务的 DSH。卸载：
+需要带 Web GUI、侧边栏底部插槽和账号服务的 DSH。卸载：
 
 ```bash
 dsh plugin --profile web remove @jimmyzm/dsh-billing-card
@@ -74,64 +68,68 @@ dsh plugin --profile web remove @jimmyzm/dsh-billing-card
 
 ## 工作原理
 
-**Host 半边** —— 每次应用启动抓取一次中英两个价目页与大陆节假日日历，解析后在 `GET /deepseek-billing-card/data` 上作答。**Client 半边** —— 注册在 `sidebar.footer.action` 的 React 组件，读取该路由、实时跟随输入框的模型选择、每 30 秒刷新余额。没有构建步骤。
+Host 半边在每次启动时拉取两份价目表和中国大陆节假日日历，通过 `GET /deepseek-billing-card/data` 提供；Client 半边是 `sidebar.footer.action` 里的 React 组件，读取该路由、跟随输入框的模型选择，并每 30 秒刷新一次余额。
 
-### 计费窗口
+切到由开放平台计费的提供商时，卡片会立刻让 Host 重读一次余额，金额随切换生效，不用等下一个刷新周期。
 
-高峰 = **北京时间周一至周五 9:00–12:00、14:00–18:00，且不含法定节假日**，其余时段按空闲（半价）计费。周末全天空闲，所以调休的周六显示灰色「调休」标签而不是高峰价。
+### 计费时段
 
-### 币种
+高峰是北京时间周一至周五 09:00–12:00 和 14:00–18:00，中国法定节假日除外；其余为空闲时段。
 
-中文界面用官方人民币价目，其余语言用官方美元价目。
+### 货币
 
-> [!WARNING]
-> 两张表各自抓取、各自回退，且不做任何换算 —— 卡片没有汇率，也不凭空造一个。
+中文界面用人民币价目表，其他语言用美元价目表。不做汇率换算，余额保持钱包自身的货币。
+
+### 悬停提示
+
+虚线下划线标出触发区：余额标题、模型名、各个标签。
+
+- **余额** —— 屏幕上的金额，逐个钱包一行，合计在最后，并说明刷新频率。
+- **模型** —— 计价单位，以及价格是实时抓取还是内置快照。
+- **时段** —— 计费窗口与日历来源；「调休」说明调休日如何计费。
+
+价格区没有悬停提示 —— 标签都在屏幕上。
 
 ### 数据来源
 
 | 内容 | 来源 |
 | --- | --- |
 | 账号余额、模型 | DSH 账号服务；输入框的模型选择 |
-| 开放平台余额 | `GET https://api.deepseek.com/user/balance`，用 Models 页保存的 `DEEPSEEK_API_KEY` 凭据授权（启动环境变量作兜底） |
-| 单价 | <https://api-docs.deepseek.com/zh-cn/quick_start/pricing/> 与 <https://api-docs.deepseek.com/quick_start/pricing/> |
+| 开放平台余额 | `GET https://api.deepseek.com/user/balance`，用 Models 页保存的 `DEEPSEEK_API_KEY` 凭据（启动环境是回退） |
+| 价格 | <https://api-docs.deepseek.com/zh-cn/quick_start/pricing/> 与 <https://api-docs.deepseek.com/quick_start/pricing/> |
 | 节假日 | <https://calendars.icloud.com/holidays/cn_zh.ics> |
 
 ## 已知边界
 
-- 价目与节假日每次应用启动校准一次，长期不重启的应用保留启动时的那份；开放平台余额是例外：Host 每 30 秒重读一次，卡片也在自己的 30 秒心跳里重读，所以运行中补配的 Key 不刷新页面也能出现。
-- 没有配置 `DEEPSEEK_API_KEY` 时卡片只显示账号余额，悬停提示会说明未配置 Key。
-- DeepSeek 模型由非官方渠道提供时不显示价格：价目表是 DeepSeek 自己的，照搬上去就是编出来的数字。
-- 币种之间不换算，余额保持钱包自身币种。
-- 卡片需要同源 HTTP 界面（`dsh web`）；没有 Web 服务时用内置副本运行。
-- 实时模型跟随依赖可选的 `uiSession` 与 `modelDirectories` 服务，缺失时按目录默认值标价。
+- 价目与节假日在每次启动时读取一次；开放平台余额每 30 秒重新读取。切换提供商时立即重读。
+- 没有配置 `DEEPSEEK_API_KEY` 时显示账号余额。
+- 非 DeepSeek 官方渠道提供的模型不显示价格。
+- 卡片需要 HTTP GUI（`dsh web`）；没有 web 服务器时用内置数据，缺少 `uiSession` / `modelDirectories` 服务时按目录默认模型计价。
 
 ## 开发
 
-没有构建步骤：`client.js` 是手写的浏览器模块，`index.js` 与 `parse.js` 是 Host 半边。卡片只渲染自己的子树、只读 `--dsw-alias-*` token，不会改到宿主。
+无构建步骤：`client.js` 是手写的浏览器模块，`index.js` 与 `parse.js` 是 Host 半边。卡片只渲染自己的子树，只读 `--dsw-alias-*` 主题变量。
 
 ```
 package.json        # dsh.bundle.patch + dsh.client
-cordis.patch.yml    # 插入 dsh-billing-card 一行
+cordis.patch.yml    # 插入 dsh-billing-card 条目
 index.js parse.js   # Host 半边：启动抓取 + 数据路由
-client.js           # Client 半边：卡片与内置副本
-locale/             # 插件管理界面用的中英字典
+client.js           # Client 半边：卡片与内置回退数据
+locale/             # 插件管理页用的中英文字典
 icon.svg            # 插件图标
-docs/               # README 徽标与截图（只在仓库里，不进包）
+docs/               # README 图标与截图（只在仓库里，不进包）
 test/               # 离线测试：解析器、Host 路由、Client 渲染
 AGENTS.md           # 面向 Agent 的开发规范（只在仓库里，不进包）
 .agents/skills/     # 面向 Agent 的项目 skills（只在仓库里，不进包）
 .github/workflows/  # ci（测试）与 publish（带 provenance 发布 npm）
 ```
 
-想跑本地这份代码而不是 npm 上的包，把目录交给它即可 —— 会 link 进 profile，改 `client.js` 刷新页面就生效：
+想在本地跑而不是用已发布的包，把文件夹加进去 —— 它会以链接方式装进 profile，改 `client.js` 刷新页面即生效：
 
 ```bash
 dsh plugin --profile web add /path/to/dsh-billing-card
 ```
 
-`npm test` 跑离线测试：解析器对 `test/fixtures` 里保存的页面、Host 路由（上游用桩）、以及 Client 半边在迷你
-React 运行时里的渲染。无依赖、不联网。
+`npm test` 跑离线测试：解析器跑 `test/fixtures` 里抓下来的页面，Host 路由用桩上游，Client 半边跑在迷你 React 运行时里。无依赖、不联网。`AGENTS.md` 里是开发规范和三个项目 skill。
 
-`AGENTS.md` 是这个仓库的 Agent 开发规范：不可违背的约束（价格与节假日不许编、不做汇率换算、金额用十进制字符串精确截断、按数据源分别回退）、兼容性红线，以及 `.agents/skills/` 下的三个 skill —— `dsh-plugin-development`、`billing-regression-testing`、`release-verification`。DSH 是从会话工作目录往上找最近的 `.git` 来发现 `AGENTS.md` 和这些 skill 的，所以 Agent 会话请开在仓库根目录。
-
-以 [MIT 许可](LICENSE) 发布。
+基于 [MIT 许可](LICENSE)。

@@ -27,18 +27,62 @@ so a session rooted at the parent folder loads neither.
 4. **Money math is exact.** Wallet totals are summed as decimal strings and truncated toward
    zero exactly once; a positive sub-cent total renders 「不足 0.01」/「under 0.01」. Never use
    float addition, never truncate per wallet.
-5. **A list price needs a DeepSeek provider.** The table is DeepSeek's own, so the card quotes
+5. **A balance needs a billing provider, and the tooltip needs the balance.** The provider
+   decides the headline: a `deepseek-official` model is billed by the open platform, so the API
+   balance leads there (「未配置 API Key」/「读取失败，稍后重试」 when it cannot answer); every other
+   provider leads with the DSH account balance, and a signed-out account falls back to the API
+   balance instead of a blank. The balance test is `billsOnOpenPlatform` — exactly
+   `deepseek-official` — and is deliberately narrower than the price test `billsAtListPrice`:
+   `deepseek` and `deepseek-account` still bill like the official table but are not the open
+   platform, so they headline the account balance. A notice is never dressed up as an amount.
+6. **A list price needs a DeepSeek provider.** The table is DeepSeek's own, so the card quotes
    a price only while the provider bills at it — `OFFICIAL_PROVIDERS` in `client.js` is the
    explicit set `deepseek-account`, `deepseek-official`, `deepseek` (compared case-insensitively),
    and an unknown provider keeps pricing what it knows. Do not widen it to a substring match:
    a lookalike id such as `llm-deepseek` belongs to somebody else. A DeepSeek model served
    by any other provider shows 「该渠道不走官方价目」/「This provider has no list price」; a model the
    table simply lacks keeps 「官方价目未收录该模型」/「No official price for this model」.
-6. **Fallbacks are per source.** If the USD page fails while the CNY page and the calendar
+7. **Fallbacks are per source.** If the USD page fails while the CNY page and the calendar
    succeed, the card still renders: live where it is live, snapshot where it is not. One failed
    upstream must not blank the others.
-7. **A merely-wrong payload must degrade, not crash.** Every field that crosses the loopback
+8. **A merely-wrong payload must degrade, not crash.** Every field that crosses the loopback
    route is re-validated by `readPriceBook` / `readHolidays` / `readRemote` on the Client side.
+
+## Hover text
+
+Hover text is the card's only place for the long explanation, so it follows the rows.
+
+- One trigger per visual row, and the trigger is that row's **label**, not the row: the balance
+  label explains the balance, the model name explains the unit and the snapshot, and each chip
+  explains itself. A row-wide anchor makes the bubble hang off the card edge instead of the word it
+  belongs to, and fires while the pointer is over a number, which reads as accidental. Give the
+  trigger `dbc-tip-trigger` (cursor + dotted underline) so the affordance is visible. Never attach
+  the same label to two nested nodes, and never put a tooltip on the price block or the holiday
+  banner — their text already says what they are.
+- The body is a spec `{title, rows, note}` rendered as a titled list: a title line, one line per
+  fact, and a footnote. Hover text appears after `delayMs: 400` (`focusDelayMs: 150` for
+  keyboard focus) in a bubble capped at `maxWidth: 248`, left-aligned with the row it explains
+  (`side: 'top'`, `align: 'start'`); the body caps at 232 px with 4/6 px of its own padding, so
+  long sentences wrap instead of running across the sidebar. Emoji lead the title (`💰` balance,
+  `⏱️` period, `🔁` make-up, `🏷️` model) — one per title, never inside a line.
+- A row may carry a tone badge: `ok` green = recharge money, `warn` yellow = bonus money, `total`
+  neutral = the sum. Every balance ends with `total`, including the open-platform balance — the
+  card never invents a separate kind for it. No badge means a plain sentence, not a wallet. Never
+  badge a row whose kind cannot be named.
+- The bubble is dark in **both** themes (its text colour comes from the primitive, not the
+  surface), so never colour text inside it with `--dsw-alias-label-*`: those tokens read as
+  muddy grey on the dark fill. Keep `color: inherit` and de-emphasise with `opacity` (lines
+  0.88, footnote 0.72); a badge is a translucent tint of its tone token with inherited text.
+- The card and the bubble are not selectable (`user-select:none`): the numbers are read, not
+  copied.
+- A balance tooltip describes only the balance on the headline: its composition and refresh
+  cadence. The account and API tooltips never mention each other. A notice is never followed by
+  a tooltip.
+- Provenance lives in one place: the calendar source belongs to the period chip, the price
+  snapshot belongs to the model row.
+- Use the DSH primitive, `require('@deepseek-ai/dsh-client-ui-primitives').Tooltip`
+  (`label`, `side`, `align`, `maxWidth`), a platform seed module. The native `title` attribute is
+  only the fallback for the offline harness. Never hand-roll a hover bubble.
 
 ## Layout and compatibility guards
 
@@ -50,8 +94,9 @@ so a session rooted at the parent folder loads neither.
 - The Host half is cached per process: a change to `index.js` or `parse.js` needs a full app
   restart to take effect. `client.js` lands on a page refresh. Say which one you changed instead
   of claiming a change is live.
-- The Client half may only `require('react')` and use `createElement` — no JSX, no other
-  modules, no globals it does not guard.
+- The Client half may only `require('react')` (rendering, `createElement`, no JSX) and the one
+  platform seed it needs for hover text, `@deepseek-ai/dsh-client-ui-primitives`. No other
+  module, no globals it does not guard.
 - Style only with `--dsw-alias-*` theme tokens, and only inside the card's own subtree. Never
   restyle host or sibling plugin DOM, no iframe, no new npm dependency without an explicit OK.
 - Every visible string needs a key in **both** dictionaries inside `client.js`
@@ -95,10 +140,19 @@ The Client asks the Host route at mount and retries on a bounded budget
 (`DATA_POLL_MS` × `DATA_POLL_LIMIT` while loading, × `DATA_FAIL_LIMIT` while failing). After
 that it re-reads the route on the existing 30 s tick (`api.current.refreshRoute`), because the
 Host re-reads the open-platform balance every 30 s (`BALANCE_REFRESH_MS`): without the re-read a card
-loaded before a key was configured froze on 「未配置 API Key」 forever. A provider switch in the composer also
-refreshes both the account reader and the route at once, so the headline flips immediately. The fast bounded retries are still the
-only defence against a Host that registers its route late — do not turn them into an unbounded
-fast poll.
+loaded before a key was configured froze on 「未配置 API Key」 forever.
+
+A provider switch asks at once, and asks for a *fresh* amount: `refreshRoute(true)` appends
+`?balance=refresh`, which makes the Host start `loadDeepseekBalance()` before answering (at most one
+read per `BALANCE_ASK_GAP_MS = 3000`, one in flight). The route still answers from memory, so the
+GUI never waits on the network; when the amount is not ready yet the Client follows up
+`BALANCE_ASK_LIMIT = 2` times at `BALANCE_ASK_MS = 1000`. Two things trigger that: a change of the
+session's selection store (`watchSelection`, the composer), and any provider-surface event
+(`watchUpstream` — `llm/adapters-updated`, `settings/document-updated`, `credentials/record-updated`,
+`credentials/reference-updated`), because adding a provider or pasting a key changes which balance
+pays without touching the selection. The periodic tick keeps asking the plain route — a read, not a
+refresh. The fast bounded retries are still the only defence against a Host that registers its route
+late; do not turn them into an unbounded fast poll.
 
 ## Pointers
 
