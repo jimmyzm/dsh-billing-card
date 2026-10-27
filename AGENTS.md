@@ -137,6 +137,9 @@ Hover text is the card's only place for the long explanation, so it follows the 
 - Undo a pushed commit with `git revert`, never with a force-push.
 - Keep `README.md` (English, default) and `README.zh-CN.md` in step: same sections, same table
   rows, cross-linked.
+- A release title is the bare tag in English (`v1.2.1`). Only a major feature update earns a headline
+  after it, also in English (`v1.1.0 — ☁️ open-platform balance, provider-aware pricing`). The body,
+  unlike the title, is always bilingual.
 - Release notes lead with Chinese and then repeat the same sections in English; each language uses one
   emoji per section (`## ✨ 新增`, `## 🐛 修复`, `## 📦 打包` / `## ✨ New`, `## 🐛 Fixed`,
   `## 📦 Package`). They mirror the commits of that tag.

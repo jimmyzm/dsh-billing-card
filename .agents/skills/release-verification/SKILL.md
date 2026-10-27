@@ -56,6 +56,9 @@ time you need to prove that what is on npm matches what is in the repo and insta
    `repository`/`homepage`/`bugs` use the lowercase `jimmyzm/dsh-billing-card` path; `files`
    still matches step 2.
 5. Release: push the commit, then create the tag and release. Publishing runs from
+   Title the release with the bare English tag (`v1.2.1`); add a short English headline only for a
+   major feature update (`v1.1.0 — ☁️ open-platform balance, provider-aware pricing`). The body is
+   Chinese first, then the same sections in English, regardless.
    `.github/workflows/publish.yml` on the release, using npm trusted publishing (OIDC).
    **Never run `npm publish` locally** — provenance only exists when the workflow signs it.
    The job is idempotent: it asks the registry's version document first and prints
