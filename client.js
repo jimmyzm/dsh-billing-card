@@ -99,14 +99,12 @@ window.__ModuleLoader__.load({
       'card.balance.api.failed': '读取失败，稍后重试',
       'card.balance.granted': '赠金',
       'card.balance.toppedUp': '充值',
-      'card.balance.total': '合计',
       'card.balance.signedOutMissing': '未登录，且未配置 API Key',
       'card.balance.signedOutFailed': '未登录，API 余额读取失败',
       'card.balance.hintBonus': 'DSH 账号余额（含赠金），每 30 秒刷新',
       'card.bonus': '赠送',
       'card.period.idle': '空闲',
       'card.period.peak': '高峰',
-      'card.schedule': '高峰：北京时间周一至周五 9:00–12:00、14:00–18:00（不含法定节假日）；其余时段为空闲。',
       'card.countdown.toPeak': '距高峰',
       'card.countdown.toIdle': '距空闲',
       'card.countdown.day': '天',
@@ -147,14 +145,12 @@ window.__ModuleLoader__.load({
       'card.balance.api.failed': 'read failed, retrying',
       'card.balance.granted': 'Bonus',
       'card.balance.toppedUp': 'Topped up',
-      'card.balance.total': 'Total',
       'card.balance.signedOutMissing': 'Not signed in, and no API key configured',
       'card.balance.signedOutFailed': 'Not signed in; the API balance could not be read',
       'card.balance.hintBonus': 'DSH account balance incl. bonus, refreshed every 30 s',
       'card.bonus': 'Bonus',
       'card.period.idle': 'Idle',
       'card.period.peak': 'Peak',
-      'card.schedule': 'Peak: Beijing time Monday to Friday 9:00-12:00 and 14:00-18:00, excluding Chinese statutory holidays. Every other time is idle.',
       'card.countdown.toPeak': 'Peak in',
       'card.countdown.toIdle': 'Idle in',
       'card.countdown.day': 'd',
@@ -611,7 +607,7 @@ window.__ModuleLoader__.load({
       '.dbc-holiday-icon{flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}',
       '.dbc-holiday-text{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.dbc-holiday-meta{flex:0 0 auto;margin-left:auto;font-weight:400;color:var(--dbc-ink-3)}',
-      // label line: title on the left, state chips on the right
+      // opening line: the countdown on the left, the state chips on the right
       '.dbc-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;min-width:0}',
       '.dbc-chips{display:flex;align-items:center;gap:4px;flex:0 0 auto;margin-left:auto}',
       '.dbc-chip{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;height:18px;padding:0 7px;border-radius:999px;font:500 11px/14px var(--dbc-font);white-space:nowrap;cursor:help}',
@@ -636,12 +632,11 @@ window.__ModuleLoader__.load({
       '.dbc-price{display:flex;flex-direction:column;gap:1px;min-width:0}',
       '.dbc-price-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 11px/14px var(--dbc-font);color:var(--dbc-ink-3)}',
       '.dbc-price-value{white-space:nowrap;font:650 13px/16px var(--dbc-font);color:var(--dbc-ink-1)}',
-      '.dbc-price-empty{grid-column:1 / -1;font:400 11px/14px var(--dbc-font);color:var(--dbc-ink-3)}',
       '.dbc-tip-trigger{cursor:help;border-bottom:1px dashed color-mix(in srgb,var(--dbc-ink-3) 35%,transparent)}',
       '.dbc-tip-plain{cursor:help}',
       '.dbc-tip-plain:focus-visible,.dbc-tip-trigger:focus-visible{outline:2px solid color-mix(in srgb,var(--dbc-blue) 55%,transparent);outline-offset:2px}',
-      // The bubble is a fixed dark surface in both themes, so its accents are fixed
-      // too: the theme-aware --dbc-* colours would land dark-on-dark in light mode.
+      // The bubble is the card's own surface, not the host primitive: it inherits the
+      // theme like the card does, so the --dbc-* tokens resolve in both themes.
       '.dbc-tip{position:fixed;z-index:2147483000;display:flex;flex-direction:column;max-width:248px;box-sizing:border-box;padding:8px 10px;border:1px solid var(--dbc-line);border-radius:10px;background:var(--dbc-surface);color:var(--dbc-ink-1);box-shadow:0 6px 24px -8px rgba(15,17,21,.28),0 1px 3px rgba(15,17,21,.08);font:400 11px/14px var(--dbc-font);font-variant-numeric:tabular-nums;text-align:left;white-space:normal;pointer-events:none}',
       '.dbc-tip-rule{height:1px;margin:7px 0 5px;background:color-mix(in srgb,var(--dbc-ink-1) 12%,transparent)}',
       '.dbc-tip-row{display:flex;align-items:flex-start;gap:7px;min-width:0;padding:2px 0;font-size:11px;line-height:14px}',
