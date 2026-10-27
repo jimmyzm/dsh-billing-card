@@ -53,6 +53,22 @@ jobs:
       - name: Check the tarball contents
         run: npm publish --dry-run
 
+      # A re-run, or a release published twice, must not turn red: the version is
+      # already on the registry, and publishing it again only produces
+      # `E403 cannot publish over the previously published versions`. Ask the
+      # version document directly rather than the packument, which can lag.
+      - id: registry
+        name: Check whether the version is already published
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          url="https://registry.npmjs.org/@jimmyzm%2Fdsh-billing-card/${version}"
+          if curl -fsS --max-time 20 "$url" >/dev/null; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::@jimmyzm/dsh-billing-card@${version} is already on the registry; skipping publish."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Trusted publishing (OIDC) needs npm >= 11.5; the npm bundled with the
       # Node image is older and would fall back to a token. Pinned to the 11
       # major on purpose: `@latest` moved to a major whose publish path the
@@ -63,4 +79,5 @@ jobs:
           npm --version
 
       - name: Publish with provenance
+        if: steps.registry.outputs.published != 'true'
         run: npm publish --provenance --access public
