@@ -623,7 +623,7 @@ console.log('english locale');
   check('en tooltip quotes USD', (await tipOf(handle, 'dbc-model')).includes('USD per 1M tokens'), true);
   const values = findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-value').map(text);
   check('en prices come from the USD table', JSON.stringify(values), JSON.stringify(['0.15', '0.003', '0.60']));
-  check('en price labels', JSON.stringify(findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-label').map(text)), JSON.stringify(['Input', 'Cache read', 'Output']));
+  check('en price labels', JSON.stringify(findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-label').map(text)), JSON.stringify(['Input', 'Cached', 'Output']));
   // The unit is no longer a row of its own: it lives inside the model bubble.
   // Only text that has to advertise itself takes the dashed underline; the
   // amount is a plain trigger and the chip is its own affordance, so both carry

@@ -172,7 +172,7 @@ window.__ModuleLoader__.load({
       'card.holiday.idle': 'off-peak all day',
       'card.makeup': 'Make-up',
       'card.price.input': 'Input',
-      'card.price.cacheRead': 'Cache read',
+      'card.price.cacheRead': 'Cached',
       'card.price.output': 'Output',
       'card.price.unknown': 'No official price for this model',
       'card.price.otherProvider': 'This provider has no list price',
