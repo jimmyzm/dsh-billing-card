@@ -83,7 +83,8 @@ running DSH profile.
   `test/`, `.agents/`, `AGENTS.md`, `.github/`, `.DS_Store`.
 - For any visual or layout change, render it offline and read the DOM text (not only the
   screenshot): the current model may not be able to open images, so assert the markup instead —
-  element classes, text content, and the tooltip string.
+  element classes, text content, and the tooltip string. The bubble is the card's own element
+  (`.dbc-tip*`), not the host primitive, so its markup is in the tree like any other node.
 - Bilingual changes: assert both locales, and assert that the two key sets are identical (the
   suite already checks this).
 - State plainly what is live and what is waiting for a restart. Never say "it works now" for a

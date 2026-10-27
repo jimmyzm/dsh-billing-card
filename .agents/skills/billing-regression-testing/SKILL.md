@@ -62,12 +62,16 @@ card, so `periodAt`/`nextSwitchAt` and the rendered chip are checked together.
      `test/fixtures/cn_zh.ics` are asserted, so a fixture refresh is a deliberate act.
 4. Fallback cases must assert **both** halves: the snapshot value *and* the snapshot-labelled
    tooltip. A card that silently shows the snapshot looks identical otherwise.
-5. Currency cases: assert locale → table (`zh`, `zh-CN`, `en`, `ja`), that the price formatter
+5. Hover bodies: the card draws its own bubble, so a test can drive it as DOM — the trigger
+   (`dbc-tip-trigger`), the rows (`dbc-tip-row` with `dbc-tip-label` / `dbc-tip-amount`), the
+   `dbc-tip-rule` between rows and note, and the note itself. Assert the row count, not a string
+   blob, or a lost row hides inside a passing substring check.
+6. Currency cases: assert locale → table (`zh`, `zh-CN`, `en`, `ja`), that the price formatter
    keeps three decimals for `0.003`, and that the balance stays in its wallet currency with the
    ISO prefix only in non-Chinese UI. No test may assert a converted amount.
-6. Host cases: drive the state machine through the stubbed fetch — every upstream ok, one
+7. Host cases: drive the state machine through the stubbed fetch — every upstream ok, one
    failing, all failing, slow-but-eventually-ready, and non-GET/HEAD on the route.
-7. Re-run `npm test`; the assertion count must go up (or stay equal if you only replaced rows),
+8. Re-run `npm test`; the assertion count must go up (or stay equal if you only replaced rows),
    and `FAIL` must be zero.
 
 ## Verification

@@ -210,8 +210,14 @@ these lists; to make something bigger, move it one step instead of inventing a h
   `.agents/`, `AGENTS.md` and `.github/` stay out of the tarball.
 - Commit style: `feat: …` / `fix: …` / `docs: …` / `test: …` / `ci: …` / `chore: …`, one
   behaviour per commit.
-- **Ask the user before every `git commit`, `git push`, release, or npm publish.** This is a
-  standing instruction, not a per-task one.
+- **Keep the skills current on your own initiative.** When a task teaches something the next agent
+  would otherwise repeat — a trap, the check that would have caught it, a new command, a new file —
+  fold it into the matching skill under `.agents/skills/` in the same change instead of waiting to
+  be asked. If it fits none of them, say so rather than inventing a fifth skill. These doc edits are
+  the one exception to the next rule: commit and push them once `npm test` is green and nothing else
+  is staged.
+- **Ask the user before every `git commit`, `git push`, release, or npm publish** (except the skill
+  documentation above). This is a standing instruction, not a per-task one.
 - Undo a pushed commit with `git revert`, never with a force-push.
 - Keep `README.md` (English, default) and `README.zh-CN.md` in step: same sections, same table
   rows, cross-linked.
@@ -219,8 +225,9 @@ these lists; to make something bigger, move it one step instead of inventing a h
   after it, also in English (`v1.1.0 — ☁️ open-platform balance, provider-aware pricing`). The body,
   unlike the title, is always bilingual.
 - Release notes lead with Chinese and then repeat the same sections in English; each language uses one
-  emoji per section (`## ✨ 新增`, `## 🐛 修复`, `## 📦 打包` / `## ✨ New`, `## 🐛 Fixed`,
-  `## 📦 Package`). They mirror the commits of that tag.
+  emoji per section (`## ✨ 新增`, `## 🐛 修复`, and `## 📦 打包` or `## 📦 调整` when the section is
+  changes rather than the package; English mirrors it with `## ✨ New`, `## 🐛 Fixed`,
+  `## 📦 Package` / `## 📦 Changed`). They mirror the commits of that tag.
 - Every release updates `CHANGELOG.md` and `CHANGELOG.zh-CN.md` together, adding the new version at
   the top with the same content as the release notes. The two files never drift.
 

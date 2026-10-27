@@ -55,21 +55,38 @@ time you need to prove that what is on npm matches what is in the repo and insta
 4. Check the manifest tells the truth: `version` equals the tag you are about to cut;
    `repository`/`homepage`/`bugs` use the lowercase `jimmyzm/dsh-billing-card` path; `files`
    still matches step 2.
-5. Release: push the commit, then create the tag and release. Publishing runs from
-   Title the release with the bare English tag (`v1.2.1`); add a short English headline only for a
-   major feature update (`v1.1.0 — ☁️ open-platform balance, provider-aware pricing`). The body is
-   Chinese first, then the same sections in English, regardless.
-   `.github/workflows/publish.yml` on the release, using npm trusted publishing (OIDC).
+5. Write the release notes **from the changelog**, not by hand. Start by listing everything the
+   tag will contain and checking that each commit is claimed by the new section:
+   ```bash
+   git log --oneline $(git describe --tags --abbrev=0)..HEAD
+   ```
+   Anything in `## 未发布` / `## Unreleased` that actually shipped belongs in the version being cut —
+   fold it up instead of letting the section accumulate. A commit that is in the range but in no
+   section is a missing changelog entry, not "housekeeping nobody needs".
+   The title is the bare English tag (`v1.3.0`); only a major feature update earns an English
+   headline after a dash (`v1.1.0 — ☁️ open-platform balance, provider-aware pricing`). The body is
+   Chinese first, then the same sections in English, whatever the title says.
+6. Cut the tag and the release; publishing runs from `.github/workflows/publish.yml` on the release
+   event, using npm trusted publishing (OIDC).
+   ```bash
+   git tag v<version> && git push origin v<version>
+   gh release create v<version> --title "v<version>" --notes-file /tmp/rel-<version>.md
+   gh release view v<version> --json name,tagName --jq '.name + " " + .tagName'   # name == tag
+   gh run watch   # on the publish run
+   ```
+   Fold the changelog section into the notes file rather than retyping it, then prove they agree:
+   ```bash
+   diff <(sed -n '/^## <version>/,/^## /p' CHANGELOG.zh-CN.md | grep '^- ') \
+        <(gh release view v<version> --json body --jq .body | grep '^- ')
+   ```
    **Never run `npm publish` locally** — provenance only exists when the workflow signs it.
    The job is idempotent: it asks the registry's version document first and prints
    `already on the registry; skipping publish` when the version exists, so a re-run
    is green instead of `E403 cannot publish over the previously published versions`.
    Do not read that skip as a failure, and do not bump the version just to re-run.
-   ```bash
-   gh release view v<version>
-   gh run watch   # on the publish run
-   ```
-6. Validate the artifact that came back:
+   Editing a release afterwards does **not** re-publish: the workflow listens to `published` only,
+   so a wrong title or a missing bullet is cheap to fix.
+7. Validate the artifact that came back:
    ```bash
    npm view @jimmyzm/dsh-billing-card version dist-tags time --json
    npm view @jimmyzm/dsh-billing-card dist.shasum dist.integrity --json
@@ -89,7 +106,7 @@ time you need to prove that what is on npm matches what is in the repo and insta
    With the modes normalised the local pack reproduces the registry tarball byte for byte (equal
    `shasum`); when it does not, compare the extracted trees and report a content diff — never a
    "mismatch" that is only a file mode.
-7. Install acceptance, in a real profile:
+8. Install acceptance, in a real profile:
    ```bash
    dsh plugin --profile <name> add @jimmyzm/dsh-billing-card@<version>
    ```
@@ -100,9 +117,10 @@ time you need to prove that what is on npm matches what is in the repo and insta
 ## Verification
 
 Every step above leaves a one-line answer you paste into the report: the assertion count, the
-file list and sizes, the loaded `Object.keys`, the version/shasum/integrity, the run URL and
-conclusion, the install result and the route status. A release is verified only when the numbers
-match the repo, not when the commands ran.
+file list and sizes, the loaded `Object.keys`, the **commit range and the section that claims each
+commit**, the release title against the tag, the **notes-vs-changelog diff (empty)**, the
+version/shasum/integrity, the run URL and conclusion, the install result and the route status. A
+release is verified only when the numbers match the repo, not when the commands ran.
 
 ## Failure handling
 
@@ -111,9 +129,14 @@ match the repo, not when the commands ran.
   around it with `NPM_TOKEN` or a local publish.
 - `npm view` says the package is not found or too new: the publish run had not finished; re-check
   the run before concluding anything.
-- Shasum mismatch: the published tarball came from a different tree — compare
-  `npm pack --dry-run` on the tag against `npm view … dist.tarball` contents and fix the tree,
-  never the published tag.
+- Shasum mismatch: first rule out file modes (`0600` vs `0644` in the tar header). If the members
+  still differ, the published tarball came from a different tree — compare the extracted files
+  against `git archive <tag>` and fix the tree, never the published tag.
+- The release title is the product name plus the version (`DSH 计费卡片 v1.3.0`): that is not the
+  rule. `gh release edit <tag> --title <tag>`. Headline only for a major feature update, in English.
+- `## 未发布` / `## Unreleased` has entries that are months old: they shipped in some earlier version
+  and nobody claimed them. Fold them into that version (they are changelog bugs, not a backlog) and
+  leave the forward section for what is genuinely after the newest tag.
 - Card unchanged after install: the app was not restarted (Host half) or the page was not
   reloaded (Client half). Verify the served module `rev` before believing the install landed.
 - Extra files in the tarball: fix `files[]` or `.npmignore`; do not publish "as is" and warn.
