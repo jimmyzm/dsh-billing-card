@@ -620,7 +620,7 @@ window.__ModuleLoader__.load({
       '.dbc-amount{display:inline-flex;align-items:baseline;gap:3px;min-width:0;max-width:100%;font-size:20px;line-height:25px;font-weight:660;letter-spacing:-.02em;color:var(--dbc-ink-1);white-space:nowrap}',
       '.dbc-amount-small{font-size:17px;line-height:22px;letter-spacing:-.01em}',
       '.dbc-code{flex:0 0 auto;font:400 11px/14px var(--dbc-font);letter-spacing:0;color:var(--dbc-ink-3)}',
-      '.dbc-note{font:400 13px/18px var(--dbc-font);letter-spacing:0;color:var(--dbc-ink-3)}',
+      '.dbc-note{font:400 13px/16px var(--dbc-font);letter-spacing:0;color:var(--dbc-ink-3)}',
       // provider line: provider on the left, countdown on the right, both on one line
       '.dbc-mrow{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 6px;min-width:0}',
       '.dbc-provider{flex:0 0 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 11px/14px var(--dbc-font);color:var(--dbc-ink-3)}',
