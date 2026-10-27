@@ -70,6 +70,7 @@ window.__ModuleLoader__.load({
       'card.balance.hint.api': 'DeepSeek 开放平台余额（API Key），每 30 秒刷新',
       'card.balance.line.api': 'DeepSeek API',
       'card.balance.api.missing': '未配置 API Key',
+      'card.balance.api.failed': '读取失败，稍后重试',
       'card.balance.hintBonus': 'DSH 账号余额（充值 + 赠金合计），每 30 秒刷新',
       'card.bonus': '赠送',
       'card.period.idle': '空闲',
@@ -112,6 +113,7 @@ window.__ModuleLoader__.load({
       'card.balance.hint.api': 'DeepSeek platform balance for the API key, refreshed every 30 s',
       'card.balance.line.api': 'DeepSeek API',
       'card.balance.api.missing': 'No API key',
+      'card.balance.api.failed': 'read failed, retrying',
       'card.balance.hintBonus': 'DSH account balance, recharge plus bonus, refreshed every 30 seconds',
       'card.bonus': 'Bonus',
       'card.period.idle': 'Idle',
@@ -949,6 +951,10 @@ window.__ModuleLoader__.load({
         }
       } else if (apiBalance !== null && apiBalance !== undefined && apiBalance.status === 'unavailable') {
         walletLines.push(tr('card.balance.line.api') + ': ' + tr('card.balance.api.missing'));
+      } else if (apiBalance !== null && apiBalance !== undefined && apiBalance.status === 'failed') {
+        // A key is configured but the read did not land. The headline stays the
+        // account balance: an unreadable balance is not a zero balance.
+        walletLines.push(tr('card.balance.line.api') + ': ' + tr('card.balance.api.failed'));
       }
       const balanceTitle = [balanceHint].concat(walletLines).join('\n');
 

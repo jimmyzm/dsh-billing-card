@@ -982,6 +982,28 @@ console.log('balance follows the provider');
 }
 
 {
+  // A key that is configured but unreadable: keep the account headline, and say the
+  // read failed — "no key yet" and "key broken" must not look the same.
+  const live = liveServices({ 'session-1': { provider: 'deepseek-official', model: 'deepseek-chat' } });
+  const data = livePayload({ deepseek: { status: 'failed' } });
+  const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
+  check('a failed API read falls back to the account balance', text(byClass(tree, 'dbc-balance')), '¥32.50');
+  check('a failed API read keeps the account title', text(byClass(tree, 'dbc-title')), 'DeepSeek 余额');
+  const hint = byClass(tree, 'dbc-balance').props.title;
+  check('the tooltip reports the failed read', hint.includes('DeepSeek API: 读取失败，稍后重试'), true);
+  check('and does not claim the key is missing', hint.includes('未配置 API Key'), false);
+
+  const en = await mountLocalized('en', {
+    now: IDLE_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    services: liveServices({ 'session-1': { provider: 'deepseek-official', model: 'deepseek-chat' } }).services,
+    data,
+  });
+  check('english reports the failed read too', byClass(en.tree, 'dbc-balance').props.title.includes('read failed, retrying'), true);
+}
+
+{
   // The Host re-reads the balance once a minute; the card must re-ask too, or it
   // stays on whatever the first answer said — including "no API key" from
   // before the key was configured.
