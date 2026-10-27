@@ -10,7 +10,7 @@ Notable changes to `@jimmyzm/dsh-billing-card`. The format follows [Keep a Chang
 - The hover bubble is now drawn in-house: no host tooltip primitive, flip and edge clamping, an arrow pointing at the trigger, a 240 ms delay and `Esc` to close; its body is a two-column label/value list.
 - The countdown moved to the top-left and takes the colour of the current window (green idle, amber peak), matching the chip on the right.
 - The price source split into a snapshot date and a sync mode; the period bubble lists peak, idle and source; the make-up day explains itself in one sentence.
-- Both READMEs open with a 1200×320 banner (Chinese and English), and the screenshots were trimmed to one each.
+- Both READMEs open with a 1200×320 banner (Chinese and English); the screenshots were trimmed to one each and now show the live tariffs and a real holiday countdown.
 
 ### Fixed
 
@@ -23,14 +23,17 @@ Notable changes to `@jimmyzm/dsh-billing-card`. The format follows [Keep a Chang
 
 - `.dbc-note` now sits on the type scale (`18px` → `16px`), and the unused CSS rule, two dictionary keys and two stale comments are gone.
 - New project skill `dsh-card-design` plus `docs/design-skill-audit.md` (provenance and method audit of the third-party skills); `banner-design` is no longer vendored and is installed on demand.
+- The publish job is idempotent: it reads the registry's version document first and skips a version that is already published, and the tarball check uses `npm pack --dry-run`, so a re-run no longer fails on `E403 cannot publish over the previously published versions`.
+- The release-title rule is written down in `AGENTS.md`: the bare tag by default (`v1.2.1`), with an English headline after a dash only for a major feature update.
+- Every release note from 1.0.0 on leads with Chinese and repeats the English version below a rule.
+- The syntax check in all three skills now matches `ci.yml` (one `node --check` per file, then `npm test`).
 
 
 ## Unreleased
 
 ### Changed
 
-- Every release note from 1.0.0 on now leads with Chinese and repeats the English version below a rule.
-- The publish job is idempotent: it reads the registry's version document first and skips a version that is already published, and the tarball check uses `npm pack --dry-run` so a re-run no longer fails on `E403 cannot publish over the previously published versions`.
+- The `release-verification` skill now compares the published tarball by content: npm records the working tree's file modes in the tar header, so `0600` and `0644` give the same bytes two different shasums. Normalise with `chmod 644`, then `cmp` the files instead of distrusting the build.
 
 ## 1.2.1 — 2026-10-27
 

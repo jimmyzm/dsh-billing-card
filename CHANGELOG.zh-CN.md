@@ -10,7 +10,7 @@
 - 悬停气泡改为自绘：不再依赖宿主 tooltip 图元，位置带翻转与边缘夹取，箭头指向触发词，240 毫秒延迟、`Esc` 关闭；气泡内容统一成「标签 / 数值」两列。
 - 倒计时移到首行左侧，颜色跟随当前时段（空闲绿、高峰黄），与右侧时段胶囊一致。
 - 价目来源拆成「快照日期」与「校准方式」两行；时段说明改为「高峰 / 空闲 / 数据来源」三条；调休说明独立成一句。
-- 两份 README 增加 1200×320 头图（中英各一），截图精简为一张。
+- 两份 README 增加 1200×320 头图（中英各一），截图精简为一张，且截图改用当日真实价目与真实的假期倒计时。
 
 ### 修复
 
@@ -23,14 +23,17 @@
 
 - `.dbc-note` 行高对齐刻度（`18px` → `16px`），并删除无用的 CSS 规则、两个字典键与两条过期注释。
 - 新增项目内的 `dsh-card-design` skill 与 `docs/design-skill-audit.md`（第三方 skill 的来源与方法审计）；`banner-design` 不再随仓库分发，改回按需安装。
+- 发布任务改为幂等：先读 registry 的版本文档，已发布的版本直接跳过；包内容检查换成 `npm pack --dry-run`，重跑不会再因 `E403 cannot publish over the previously published versions` 失败。
+- 发布标题规范写进 `AGENTS.md`：默认用裸 tag（`v1.2.1`），只有重大功能更新才在破折号后加英文标题。
+- 1.0.0 以来的所有 release 说明都补齐中文并前置，分隔线下方重复英文版本。
+- 三个 skill 里的语法检查示例与 `ci.yml` 对齐（逐个 `node --check` 后再跑 `npm test`）。
 
 
 ## 未发布
 
 ### 调整
 
-- 1.0.0 以来的所有 release 说明都补齐中文并前置，分隔线下方重复英文版本。
-- 发布任务改为幂等：先读 registry 的版本文档，已发布的版本直接跳过；包内容检查换成 `npm pack --dry-run`，重跑不会再因 `E403 cannot publish over the previously published versions` 失败。
+- `release-verification` skill 改为按内容比对线上 tarball：npm 会把工作区的文件模式写进 tar 头，`0600` 与 `0644` 会让同一份内容得到两个 shasum，先 `chmod 644` 再比对，不一致时逐个 `cmp` 文件而不是怀疑打包。
 
 ## 1.2.1 — 2026-10-27
 
