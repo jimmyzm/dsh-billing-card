@@ -49,8 +49,10 @@ running DSH profile.
    - Every visible string goes into **both** dictionaries in `client.js` (`//#region
      dictionaries`) under the same key. `locale/zh.json` and `locale/en.json` carry plugin `meta`
      only.
-   - Style with `--dsw-alias-*` tokens only, scoped to the card's own subtree (`.dbc-*` classes).
-     No hardcoded colours, no restyling host or sibling plugin DOM.
+   - Declare the palette on the plugin's own root with `light-dark(...)` (this repo: `--dbc-*` on
+     `.dbc-root`) and read only those tokens; the app's `color-scheme` on `<html>` is what resolves
+     them, so no host variable is needed. Never restyle host or sibling plugin DOM, and never
+     hardcode a hex outside the token block.
    - Money and date rendering must reuse the existing formatters (`numberFormatter`,
      `priceFormatter`, `truncate`) — no per-site `toFixed`.
 3. Host half only:
