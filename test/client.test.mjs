@@ -2062,5 +2062,22 @@ console.log('hover bubble');
   check('the make-up bubble is its note', text(byClass(bubble, 'dbc-tip-note')), '调休日按周末处理，全天不计高峰。');
 }
 
+// ------------------------------------------------------- stylesheet integrity
+{
+  // A typo'd custom property paints nothing and no render assertion can see it:
+  // the earlier `.dbc-tip-rule{background:var(--dbc-line-2)}` pointed at a token
+  // that was never declared, so the separator between the rows and the note was
+  // in the DOM but invisible. Every `var(--dbc-*)` the stylesheet reads must be
+  // declared by the same stylesheet.
+  const cssStart = src.indexOf('const CARD_CSS = [');
+  const css = src.slice(cssStart, src.indexOf("].join('');", cssStart));
+  const declared = new Set([...css.matchAll(/(--dbc-[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+  const used = new Set([...css.matchAll(/var\((--dbc-[a-z0-9-]+)/g)].map((m) => m[1]));
+  check('the stylesheet declares tokens', declared.size > 10, true);
+  const undeclared = [...used].filter((name) => !declared.has(name)).sort();
+  check('every var(--dbc-*) is declared', undeclared.join(','), '');
+  check('the tooltip separator is declared', declared.has('--dbc-line') || declared.has('--dbc-ink-1'), true);
+}
+
 console.log(failures === 0 ? '\nclient: ALL CHECKS PASSED' : '\nclient: ' + failures + ' CHECK(S) FAILED');
 process.exitCode = failures === 0 ? 0 : 1;

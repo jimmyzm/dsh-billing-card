@@ -643,7 +643,7 @@ window.__ModuleLoader__.load({
       // The bubble is a fixed dark surface in both themes, so its accents are fixed
       // too: the theme-aware --dbc-* colours would land dark-on-dark in light mode.
       '.dbc-tip{position:fixed;z-index:2147483000;display:flex;flex-direction:column;max-width:248px;box-sizing:border-box;padding:8px 10px;border:1px solid var(--dbc-line);border-radius:10px;background:var(--dbc-surface);color:var(--dbc-ink-1);box-shadow:0 6px 24px -8px rgba(15,17,21,.28),0 1px 3px rgba(15,17,21,.08);font:400 11px/14px var(--dbc-font);font-variant-numeric:tabular-nums;text-align:left;white-space:normal;pointer-events:none}',
-      '.dbc-tip-rule{height:1px;margin:6px 0 4px;background:var(--dbc-line-2)}',
+      '.dbc-tip-rule{height:1px;margin:7px 0 5px;background:color-mix(in srgb,var(--dbc-ink-1) 12%,transparent)}',
       '.dbc-tip-row{display:flex;align-items:flex-start;gap:7px;min-width:0;padding:2px 0;font-size:11px;line-height:14px}',
       '.dbc-tip-dot{flex:0 0 auto;width:5px;height:5px;margin-top:4px;border-radius:50%;background:currentColor;opacity:.45}',
       '.dbc-tip-dot-ok{background:var(--dbc-green);opacity:1}',

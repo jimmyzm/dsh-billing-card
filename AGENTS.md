@@ -75,7 +75,12 @@ Hover text is the card's only place for the long explanation, so it follows the 
 - The body is a spec `{rows, note?}` rendered as a definition list, because a tooltip in this card
   always answers "what is this made of": one `label → value` row per fact (label 11 px in
   `--dbc-ink-3`, value right-aligned on a shared edge, both tabular), then a hairline plus an 11 px
-  footnote in `--dbc-ink-3` for provenance. No head, no title, no total row: the card already shows
+  footnote in `--dbc-ink-3` for provenance. The hairline is `color-mix(ink-1 12%)`, not `--dbc-line`:
+  at 12 % it reads as a separator on the bubble's own fill, and a token typo paints nothing at all
+  (that is how the rule stayed invisible once — `--dbc-line-2` was never declared, so
+  `test/client.test.mjs` now fails when the stylesheet reads a `--dbc-*` it does not declare).
+  A note without rows (the make-up chip) draws no rule: it has nothing to separate it from. No head,
+  no title, no total row: the card already shows
   the number, and the bubble only decomposes it. A value may carry `\n` (the peak window is two
   lines) — `.dbc-tip-amount` is `white-space:pre-line`, so a long value wraps right-aligned instead
   of pushing the label off the edge.
