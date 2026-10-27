@@ -6,6 +6,7 @@ Notable changes to `@jimmyzm/dsh-billing-card`. The format follows [Keep a Chang
 
 ### Changed
 
+- Every release note from 1.0.0 on now leads with Chinese and repeats the English version below a rule.
 - The publish job is idempotent: it reads the registry's version document first and skips a version that is already published, and the tarball check uses `npm pack --dry-run` so a re-run no longer fails on `E403 cannot publish over the previously published versions`.
 
 ## 1.2.1 — 2026-10-27

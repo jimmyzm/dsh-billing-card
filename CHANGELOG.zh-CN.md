@@ -6,6 +6,7 @@
 
 ### 调整
 
+- 1.0.0 以来的所有 release 说明都补齐中文并前置，分隔线下方重复英文版本。
 - 发布任务改为幂等：先读 registry 的版本文档，已发布的版本直接跳过；包内容检查换成 `npm pack --dry-run`，重跑不会再因 `E403 cannot publish over the previously published versions` 失败。
 
 ## 1.2.1 — 2026-10-27
