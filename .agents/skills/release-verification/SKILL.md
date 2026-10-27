@@ -75,8 +75,20 @@ time you need to prove that what is on npm matches what is in the repo and insta
    npm view @jimmyzm/dsh-billing-card dist.shasum dist.integrity --json
    npm audit signatures   # provenance/attestation check
    ```
-   `dist-tags.latest` must be the new version, its `shasum` must match the tarball you packed in
-   step 2, and the attestation must point at this repository and this tag.
+   `dist-tags.latest` must be the new version and the attestation must point at this repository and
+   this tag. For the artifact itself, `shasum` equality only means something when every file has the
+   same **mode** as the tagged tree: npm packs the working tree's modes, and a `0600` file becomes
+   `0644` on a fresh CI checkout, which changes the shasum while the bytes stay identical. Normalise
+   first, then compare:
+   ```bash
+   chmod 644 $(git ls-files)
+   git archive <tag> | tar x -C /tmp/tag
+   mkdir -p /tmp/reg /tmp/regx && npm pack --pack-destination /tmp/reg && tar xzf /tmp/reg/*.tgz -C /tmp/regx
+   cd /tmp/regx/package && find . -type f | while read -r f; do cmp -s "$f" "/tmp/tag/$f" || echo "DIFF $f"; done
+   ```
+   With the modes normalised the local pack reproduces the registry tarball byte for byte (equal
+   `shasum`); when it does not, compare the extracted trees and report a content diff — never a
+   "mismatch" that is only a file mode.
 7. Install acceptance, in a real profile:
    ```bash
    dsh plugin --profile <name> add @jimmyzm/dsh-billing-card@<version>
