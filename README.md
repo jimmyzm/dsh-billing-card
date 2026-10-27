@@ -20,7 +20,7 @@
 
 </div>
 
-A card in the DSH sidebar footer: the balance, the selected model's unit prices, and the current billing period with a countdown to the next switch.
+A card in the DSH sidebar footer: the balance, the provider and model behind it, their unit prices, and the current billing period with a countdown to the next switch.
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png" alt="The card on a statutory holiday" width="320" />
@@ -29,11 +29,12 @@ A card in the DSH sidebar footer: the balance, the selected model's unit prices,
 ## Features
 
 - **Balance** — the DSH account balance (recharge + bonus) or the DeepSeek open-platform balance behind your API key, whichever the selected provider bills; it follows the provider in the composer.
-- **Unit prices** — input, cache read and output for the selected model, in the tier active now; no price when another provider serves the model.
-- **Billing period** — green `Idle` / yellow `Peak`, with a countdown to the switch.
-- **Holidays** (Chinese UI) — a blue banner with the holiday's name, and a gray `调休` chip on a make-up workday.
+- **Row per fact** — the provider names the row above the model, so you can see which channel the price belongs to.
+- **Unit prices** — input, cached and output for the selected model, in the tier active now; no price when another provider serves the model.
+- **Billing period** — green `Idle` / yellow `Peak`; the countdown to the switch keeps its `Peak in` / `Idle in` wording and takes the period's colour.
+- **Holidays** (Chinese UI) — a blue strip with the holiday's name, and a gray `调休` chip on a make-up workday.
 - **Currency by language** — CNY prices in Chinese, USD everywhere else.
-- **Theme and locale** — light and dark themes, zh/en dictionaries, built-in data when an upstream cannot be fetched.
+- **Theme and locale** — light and dark themes from the card's own token layer, zh/en dictionaries, built-in data when an upstream cannot be fetched.
 
 ## Screenshots
 
@@ -52,8 +53,8 @@ Real renders, 256 px sidebar at 2× density.
 The package is published on npm ([`@jimmyzm/dsh-billing-card`](https://npmx.dev/package/@jimmyzm/dsh-billing-card)) as a DSH bundle. Use the profile you actually run (`desktop` for the desktop app, `web` for `dsh web`):
 
 Requires DSH 0.2.0-rc.1 or newer — `package.json` declares the range in `engines.dsh`, and the
-manifest fields, the footer slot, the `locale` and `webServer` services, and the tooltip primitive
-it uses all exist in that release.
+manifest fields, the footer slot, and the `locale` and `webServer` services it uses all exist in
+that release.
 
 ```bash
 dsh plugin --profile web add @jimmyzm/dsh-billing-card
@@ -86,13 +87,25 @@ A Chinese UI quotes the CNY page, every other language the USD page. Nothing is 
 
 ### Hover text
 
-A dotted underline marks the trigger: the balance label, the model name, and each chip.
+A dotted underline marks the two row labels — `Balance` and the model name — and nothing else: one
+trigger per row, never the number itself. The two chips (period, `Make-up`) are triggers too and keep
+the help cursor, but no underline, because three dashed rules in a 232 px card read as noise.
 
-- **Balance** — the amount on screen, one line per wallet, the total last, and how often it refreshes.
-- **Model** — the unit and whether the prices are live or the built-in snapshot.
-- **Period** — the billing window and where the calendar came from; `调休` explains a make-up workday.
+Each bubble is a definition list drawn by the card itself — no host primitive, so it follows the
+theme instead of inheriting a fixed dark plate: one `label → value` row per fact with a green dot
+for recharge money and an amber dot for bonus money, then a rule and a quiet footnote.
 
-The price block has no hover text — its labels are on screen.
+- **Balance** — what the headline adds up to: recharge, bonus, and how often it is re-read. The
+  open-platform balance reads the same way and never mentions the account.
+- **Model** — a price quote needs four facts, so it states four: the model id, the unit, the
+  snapshot date, and how those numbers were obtained (`startup` or `snapshot`).
+
+The period chip lists the peak window (Monday–Friday `09:00-12:00`, then `14:00-18:00`),
+everything the peak leaves idle, and where the calendar comes from; the `Make-up` chip says how a
+make-up workday is billed (idle all day, like a weekend). No bubble repeats a number the card
+already shows. The price block and the holiday banner have no hover text — their text already says
+what they are. The bubble waits 240 ms, flips below the trigger when there is no room above, and
+closes on leave, blur, or `Esc`.
 
 ### Data sources
 
@@ -108,8 +121,8 @@ The price block has no hover text — its labels are on screen.
 - Prices and holidays are read once per application start; the open-platform balance is re-read every 30 s. A provider switch re-reads it right away.
 - Without a `DEEPSEEK_API_KEY` the card shows the account balance.
 - A model served by a provider other than DeepSeek's own shows no price.
-- Verified end to end on DSH 0.2.1-rc.3. Against 0.2.0-rc.1 the source surface is the same, but that
-  build's tooltip ignores `align: 'start'` (the bubble centres) and does not read `engines.dsh` yet.
+- Verified end to end on DSH 0.2.1-rc.3; against 0.2.0-rc.1 the source surface is the same, though
+  that build does not read `engines.dsh` yet.
 - The card needs the HTTP GUI (`dsh web`); without a web server it runs on the built-in copies, and without the `uiSession` / `modelDirectories` services it prices the catalog default.
 
 ## Development

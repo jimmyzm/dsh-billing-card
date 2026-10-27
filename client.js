@@ -26,20 +26,9 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const { Fragment, createElement: h } = React;
     const { useEffect, useMemo, useRef, useState } = React;
-    // The DSH tooltip primitive lives in the platform seed, so a real shell always
-    // has it; the offline harness has no module table, and the card falls back to
-    // the native title attribute there so the suite keeps running unchanged.
-    let Tooltip = null;
-    try {
-      const primitives = require('@deepseek-ai/dsh-client-ui-primitives');
-      // A component may be a plain function or a forwardRef/memo object.
-      const candidate = primitives === null || typeof primitives !== 'object' ? null : primitives.Tooltip;
-      if (typeof candidate === 'function' || (candidate !== null && typeof candidate === 'object')) {
-        Tooltip = candidate;
-      }
-    } catch {
-      Tooltip = null;
-    }
+    // The hover bubble is drawn by this card. Borrowing the host tooltip would tie
+    // its surface to the shell's fixed dark chrome, and a card that owns its light
+    // and dark palette cannot hand one element of it to somebody else.
     /** Reads layout before paint; the harness React stub only carries useEffect. */
     const useLayoutEffect = typeof React.useLayoutEffect === 'function' ? React.useLayoutEffect : useEffect;
 
@@ -83,23 +72,29 @@ window.__ModuleLoader__.load({
     const DATA_FAIL_LIMIT = 3;
     /** Gap the card keeps under any action that precedes it in the footer row. */
     const ACTION_GAP_PX = 4;
-    /** Hover dwell before a tooltip appears; a focused control gets there faster. */
-    const TOOLTIP_DELAY_MS = 400;
-    const TOOLTIP_FOCUS_DELAY_MS = 150;
-    /** Widest the hover bubble gets, so a long sentence wraps instead of running across. */
-    const TOOLTIP_MAX_WIDTH = 248;
+    /** Hover dwell before the bubble appears; a focused control gets there faster. */
+    const TIP_DELAY_MS = 240;
+    const TIP_FOCUS_DELAY_MS = 90;
+    /** Gap between trigger and bubble, and the least distance the bubble keeps from the
+     * viewport edge. */
+    const TIP_GAP_PX = 10;
+    const TIP_EDGE_PX = 8;
+    /** Half the arrow's 9 px box: the apex sits this far inside the box it is drawn in. */
+    const TIP_ARROW_APEX_PX = 4;
+    /** The arrow never gets closer than this to a rounded corner, where it would poke out. */
+    const TIP_ARROW_EDGE_PX = 12;
 
     //#region dictionaries
     /** Simplified Chinese dictionary (the key-set source of truth). */
     const zh = {
-      'card.title': 'DeepSeek 余额',
+      'card.title': '余额',
       'card.balance.loading': '读取中',
       'card.balance.failed': '读取失败',
       'card.balance.tiny': '不足 0.01',
       'card.balance.signedOut': '未登录',
-      'card.title.api': 'DeepSeek API 余额',
+      'card.title.api': 'API 余额',
       'card.balance.hint': 'DSH 账号余额，每 30 秒刷新',
-      'card.balance.hint.api': 'DeepSeek 开放平台余额（API Key），每 30 秒刷新',
+      'card.balance.hint.api': 'DeepSeek 开放平台余额，每 30 秒刷新',
       'card.balance.api.missing': '未配置 API Key',
       'card.balance.api.failed': '读取失败，稍后重试',
       'card.balance.granted': '赠金',
@@ -107,7 +102,7 @@ window.__ModuleLoader__.load({
       'card.balance.total': '合计',
       'card.balance.signedOutMissing': '未登录，且未配置 API Key',
       'card.balance.signedOutFailed': '未登录，API 余额读取失败',
-      'card.balance.hintBonus': 'DSH 账号余额（充值 + 赠金合计），每 30 秒刷新',
+      'card.balance.hintBonus': 'DSH 账号余额（含赠金），每 30 秒刷新',
       'card.bonus': '赠送',
       'card.period.idle': '空闲',
       'card.period.peak': '高峰',
@@ -115,37 +110,39 @@ window.__ModuleLoader__.load({
       'card.countdown.toPeak': '距高峰',
       'card.countdown.toIdle': '距空闲',
       'card.countdown.day': '天',
-      'card.tier.idle': '空闲价',
-      'card.tier.peak': '高峰价',
-      'card.unit.short.CNY': '¥/百万',
-      'card.unit.short.USD': '$/百万',
       'card.unit.long.CNY': '人民币元 / 百万 tokens',
       'card.unit.long.USD': '美元 / 百万 tokens',
-      'card.snapshot': '价目快照',
       'card.snapshot.live': '启动时校准',
       'card.snapshot.builtin': '内置快照',
-      'card.schedule.source': '节假日依据 iCloud 中国大陆节假日日历，启动时更新',
-      'card.schedule.builtin': '节假日依据内置表',
-      'card.holiday.banner': '假期中',
+      'card.tip.model': '模型 ID',
+      'card.tip.unit': '计价单位',
+      'card.tip.snapshot': '快照日期',
+      'card.tip.sync': '校准方式',
+      'card.tip.peakWindow': '周一至周五 09:00-12:00\n14:00-18:00',
+      'card.tip.idleWindow': '其余所有时段',
+      'card.tip.calendar': '数据来源',
+      'card.tip.windowNote': '北京时间，不含法定节假日',
+      'card.tip.makeup': '调休日按周末处理，全天不计高峰。',
+      'card.tip.calendar.icloud': 'iCloud 中国大陆日历',
+      'card.tip.calendar.builtin': '内置节假日表',
+      'card.holiday.idle': '空闲全天',
       'card.makeup': '调休',
-      'card.makeup.tooltip': '调休工作日（班）',
-      'card.makeup.billing': '仍按空闲时段计费',
       'card.price.input': '输入',
-      'card.price.cacheRead': '缓存读取',
+      'card.price.cacheRead': '缓存',
       'card.price.output': '输出',
       'card.price.unknown': '官方价目未收录该模型',
       'card.price.otherProvider': '该渠道不走官方价目',
     };
     /** English dictionary, checked complete against the zh key set. */
     const en = {
-      'card.title': 'DeepSeek balance',
+      'card.title': 'Balance',
       'card.balance.loading': 'Reading',
       'card.balance.failed': 'Unavailable',
       'card.balance.tiny': 'under 0.01',
       'card.balance.signedOut': 'Signed out',
-      'card.title.api': 'DeepSeek API balance',
-      'card.balance.hint': 'DSH account balance, refreshed every 30 seconds',
-      'card.balance.hint.api': 'DeepSeek platform balance for the API key, refreshed every 30 s',
+      'card.title.api': 'API balance',
+      'card.balance.hint': 'DSH account balance, refreshed every 30 s',
+      'card.balance.hint.api': 'DeepSeek platform balance, refreshed every 30 s',
       'card.balance.api.missing': 'No API key',
       'card.balance.api.failed': 'read failed, retrying',
       'card.balance.granted': 'Bonus',
@@ -153,7 +150,7 @@ window.__ModuleLoader__.load({
       'card.balance.total': 'Total',
       'card.balance.signedOutMissing': 'Not signed in, and no API key configured',
       'card.balance.signedOutFailed': 'Not signed in; the API balance could not be read',
-      'card.balance.hintBonus': 'DSH account balance, recharge plus bonus, refreshed every 30 seconds',
+      'card.balance.hintBonus': 'DSH account balance incl. bonus, refreshed every 30 s',
       'card.bonus': 'Bonus',
       'card.period.idle': 'Idle',
       'card.period.peak': 'Peak',
@@ -161,21 +158,23 @@ window.__ModuleLoader__.load({
       'card.countdown.toPeak': 'Peak in',
       'card.countdown.toIdle': 'Idle in',
       'card.countdown.day': 'd',
-      'card.tier.idle': 'Idle price',
-      'card.tier.peak': 'Peak price',
-      'card.unit.short.CNY': '¥/M',
-      'card.unit.short.USD': '$/M',
       'card.unit.long.CNY': 'CNY per 1M tokens',
       'card.unit.long.USD': 'USD per 1M tokens',
-      'card.snapshot': 'price snapshot',
-      'card.snapshot.live': 'synced at startup',
-      'card.snapshot.builtin': 'built-in snapshot',
-      'card.schedule.source': 'holidays from the iCloud China mainland calendar, synced at startup',
-      'card.schedule.builtin': 'holidays from the built-in table',
-      'card.holiday.banner': ' holiday in progress',
+      'card.snapshot.live': 'startup',
+      'card.snapshot.builtin': 'snapshot',
+      'card.tip.model': 'Model ID',
+      'card.tip.unit': 'Unit',
+      'card.tip.snapshot': 'Snapshot',
+      'card.tip.sync': 'Sync mode',
+      'card.tip.peakWindow': 'Mon-Fri 09:00-12:00\n14:00-18:00',
+      'card.tip.idleWindow': 'every other hour',
+      'card.tip.calendar': 'Source',
+      'card.tip.windowNote': 'Beijing time, statutory holidays excluded',
+      'card.tip.makeup': 'A make-up workday is billed like a weekend: idle all day.',
+      'card.tip.calendar.icloud': 'iCloud mainland-China calendar',
+      'card.tip.calendar.builtin': 'built-in holiday table',
+      'card.holiday.idle': 'off-peak all day',
       'card.makeup': 'Make-up',
-      'card.makeup.tooltip': 'Make-up workday',
-      'card.makeup.billing': 'still billed as off-peak',
       'card.price.input': 'Input',
       'card.price.cacheRead': 'Cache read',
       'card.price.output': 'Output',
@@ -595,42 +594,64 @@ window.__ModuleLoader__.load({
 
     //#region card styles
     const CARD_CSS = [
-      '.dbc-root{box-sizing:border-box;display:flex;flex-direction:column;flex:0 0 100%;min-width:0;order:10;margin-bottom:6px;user-select:none;-webkit-user-select:none}',
-      '.dbc-card{box-sizing:border-box;display:flex;flex-direction:column;gap:5px;min-width:0;padding:8px 10px 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:12px;line-height:16px;font-variant-numeric:tabular-nums}',
-      '.dbc-head,.dbc-status,.dbc-model{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}',
-      '.dbc-status{align-items:center;flex-wrap:wrap;justify-content:flex-start;row-gap:2px}',
-      '.dbc-chips{display:flex;align-items:center;gap:4px;min-width:0}',
-      '.dbc-title{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary)}',
-      '.dbc-balance{flex:0 0 auto;font-size:15px;line-height:18px;font-weight:600;white-space:nowrap}',
-      '.dbc-code{font-size:10px;font-weight:500;color:var(--dsw-alias-label-secondary)}',
-      '.dbc-note{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary)}',
-      '.dbc-chip{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;padding:1px 6px 1px 5px;border-radius:999px;font-size:11px;line-height:14px;white-space:nowrap;background:var(--dsw-alias-bg-layer-2)}',
-      '.dbc-chip-idle{color:var(--dsw-alias-state-success-primary);background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 12%,transparent)}',
-      '.dbc-chip-peak{color:var(--dsw-alias-state-warn-primary);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 14%,transparent)}',
-      '.dbc-holiday{display:flex;align-items:center;gap:4px;margin:-8px -10px 0;padding:3px 10px 4px;border-radius:9px 9px 0 0;background:color-mix(in srgb,var(--dsw-alias-button-info-fill,var(--dsw-alias-label-secondary)) 10%,transparent);color:var(--dsw-alias-button-info-fill,var(--dsw-alias-label-secondary));font-size:11px;line-height:15px;overflow:hidden}',
-      '.dbc-holiday-icon{flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}',
-      '.dbc-holiday-text{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
-      '.dbc-chip-makeup{color:var(--dsw-alias-label-secondary);background:color-mix(in srgb,var(--dsw-alias-label-secondary) 12%,transparent)}',
+      // The card owns its palette. `light-dark()` resolves against the
+      // `color-scheme` the app writes on <html>, so no host token is read.
+      '.dbc-root{box-sizing:border-box;display:flex;flex-direction:column;flex:0 0 100%;min-width:0;order:10;margin-bottom:8px;user-select:none;-webkit-user-select:none;' +
+        '--dbc-surface:light-dark(#fff,#232324);--dbc-surface-2:light-dark(#f3f5f8,#2c2c2e);--dbc-surface-3:light-dark(#eceff4,#343538);' +
+        '--dbc-line:light-dark(#e9ebef,#3a3b3f);' +
+        '--dbc-ink-1:light-dark(#15181d,#f9fafb);--dbc-ink-2:light-dark(#52575e,#cfd3d6);--dbc-ink-3:light-dark(#686e77,#a8adb4);' +
+        '--dbc-green:light-dark(#157f3c,#5fd48b);--dbc-green-bg:light-dark(#e9f9ef,#16321f);' +
+        '--dbc-amber:light-dark(#a85b06,#f0b04a);--dbc-amber-bg:light-dark(#fdf3e4,#33270f);' +
+        '--dbc-blue:light-dark(#1d4fd7,#9db8ff);' +
+        '--dbc-r-card:14px;--dbc-r-inner:10px;--dbc-r-tag:6px;' +
+        '--dbc-font:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",Arial,sans-serif}',
+      '.dbc-card{box-sizing:border-box;display:flex;flex-direction:column;gap:6px;min-width:0;padding:12px;border-radius:var(--dbc-r-card);background:var(--dbc-surface);color:var(--dbc-ink-1);border:1px solid color-mix(in srgb,var(--dbc-ink-1) 7%,transparent);box-shadow:0 1px 2px rgba(17,24,39,.06),0 8px 20px -10px rgba(17,24,39,.18);font:400 11px/14px var(--dbc-font);font-variant-numeric:tabular-nums}',
+      // holiday strip, sitting on the card surface rather than as a band
+      '.dbc-holiday{display:flex;align-items:center;gap:5px;min-width:0;margin:-4px -4px 0;padding:4px 6px;border-radius:8px;background:color-mix(in srgb,var(--dbc-blue) 9%,transparent);color:var(--dbc-blue);font:500 11px/14px var(--dbc-font)}',
+      '.dbc-holiday-icon{flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}',
+      '.dbc-holiday-text{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '.dbc-holiday-meta{flex:0 0 auto;margin-left:auto;font-weight:400;color:var(--dbc-ink-3)}',
+      // label line: title on the left, state chips on the right
+      '.dbc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}',
+      '.dbc-title{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 11px/14px var(--dbc-font);color:var(--dbc-ink-3)}',
+      '.dbc-chips{display:flex;align-items:center;gap:4px;flex:0 0 auto}',
+      '.dbc-chip{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;height:18px;padding:0 7px;border-radius:999px;font:500 11px/14px var(--dbc-font);white-space:nowrap;cursor:help}',
+      '.dbc-chip-idle{background:var(--dbc-green-bg);color:var(--dbc-green)}',
+      '.dbc-chip-peak{background:var(--dbc-amber-bg);color:var(--dbc-amber)}',
+      '.dbc-chip-makeup{height:17px;padding:0 6px;border-radius:var(--dbc-r-tag);background:var(--dbc-surface-3);color:var(--dbc-ink-3)}',
       '.dbc-dot{width:5px;height:5px;border-radius:50%;background:currentColor}',
-      '.dbc-countdown{flex:0 1 auto;min-width:0;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:14px;color:var(--dsw-alias-label-secondary)}',
-      '.dbc-sep{height:1px;background:var(--dsw-alias-border-l1);margin:1px 0 0}',
-      '.dbc-model-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:14px;color:var(--dsw-alias-label-secondary)}',
-      '.dbc-tier{flex:0 0 auto;font-size:10px;line-height:13px;white-space:nowrap;color:var(--dsw-alias-label-secondary)}',
-      '.dbc-prices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}',
-      '.dbc-price{display:flex;flex-direction:column;min-width:0}',
-      '.dbc-price-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:12px;color:var(--dsw-alias-label-secondary)}',
-      '.dbc-price-value{white-space:nowrap;font-size:12px;line-height:15px;font-weight:600}',
-      '.dbc-tip-trigger{cursor:help;text-decoration:underline dotted;text-decoration-color:color-mix(in srgb,currentColor 42%,transparent);text-underline-offset:2px}',
-      '.dbc-tip{display:flex;flex-direction:column;gap:4px;max-width:232px;padding:4px 6px;white-space:normal;text-align:left;color:inherit;user-select:none;-webkit-user-select:none}',
-      '.dbc-tip-title{font-size:12.5px;line-height:17px;font-weight:600}',
-      '.dbc-tip-row{display:flex;align-items:center;gap:6px;min-width:0}',
-      '.dbc-tip-badge{flex:0 0 auto;padding:0 5px;border-radius:4px;font-size:10.5px;line-height:15px;font-weight:600;color:inherit}',
-      '.dbc-tip-badge-ok{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 36%,transparent)}',
-      '.dbc-tip-badge-warn{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 38%,transparent)}',
-      '.dbc-tip-badge-total{background:color-mix(in srgb,currentColor 20%,transparent)}',
-      '.dbc-tip-amount{margin-left:auto;font-size:11.5px;line-height:16px;font-weight:500;font-variant-numeric:tabular-nums}',
-      '.dbc-tip-line{font-size:11.5px;line-height:16px;opacity:.88;white-space:pre-line}',
-      '.dbc-tip-note{font-size:11px;line-height:16px;opacity:.72;white-space:pre-line}',
+      // the amount owns a full-width line; long values shrink instead of clipping
+      '.dbc-amount{display:flex;align-items:baseline;gap:3px;min-width:0;font-size:20px;line-height:25px;font-weight:660;letter-spacing:-.02em;color:var(--dbc-ink-1);white-space:nowrap}',
+      '.dbc-amount-small{font-size:17px;line-height:22px;letter-spacing:-.01em}',
+      '.dbc-code{flex:0 0 auto;font:400 11px/14px var(--dbc-font);letter-spacing:0;color:var(--dbc-ink-3)}',
+      '.dbc-note{font:400 13px/18px var(--dbc-font);letter-spacing:0;color:var(--dbc-ink-3)}',
+      // provider line: provider on the left, countdown on the right, both on one line
+      '.dbc-mrow{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 6px;min-width:0}',
+      '.dbc-provider{flex:0 0 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 11px/14px var(--dbc-font);color:var(--dbc-ink-3)}',
+      '.dbc-clock{flex:0 0 auto;margin-left:auto;font:500 11px/14px var(--dbc-font);white-space:nowrap}',
+      '.dbc-clock-idle{color:var(--dbc-green)}',
+      '.dbc-clock-peak{color:var(--dbc-amber)}',
+      '.dbc-model{align-self:flex-start;max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 11px/14px var(--dbc-font);color:var(--dbc-ink-1)}',
+      '.dbc-prices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:2px;padding:8px 10px;border-radius:var(--dbc-r-inner);background:var(--dbc-surface-2)}',
+      '.dbc-price{display:flex;flex-direction:column;gap:1px;min-width:0}',
+      '.dbc-price-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 11px/14px var(--dbc-font);color:var(--dbc-ink-3)}',
+      '.dbc-price-value{white-space:nowrap;font:650 13px/16px var(--dbc-font);color:var(--dbc-ink-1)}',
+      '.dbc-price-empty{grid-column:1 / -1;font:400 11px/14px var(--dbc-font);color:var(--dbc-ink-3)}',
+      '.dbc-tip-trigger{cursor:help;border-bottom:1px dashed color-mix(in srgb,var(--dbc-ink-3) 35%,transparent)}',
+      '.dbc-tip-trigger:focus-visible{outline:2px solid color-mix(in srgb,var(--dbc-blue) 55%,transparent);outline-offset:2px}',
+      // The bubble is a fixed dark surface in both themes, so its accents are fixed
+      // too: the theme-aware --dbc-* colours would land dark-on-dark in light mode.
+      '.dbc-tip{position:fixed;z-index:2147483000;display:flex;flex-direction:column;max-width:248px;box-sizing:border-box;padding:8px 10px;border:1px solid var(--dbc-line);border-radius:10px;background:var(--dbc-surface);color:var(--dbc-ink-1);box-shadow:0 6px 24px -8px rgba(15,17,21,.28),0 1px 3px rgba(15,17,21,.08);font:400 11px/14px var(--dbc-font);font-variant-numeric:tabular-nums;text-align:left;white-space:normal;pointer-events:none}',
+      '.dbc-tip-rule{height:1px;margin:6px 0 4px;background:var(--dbc-line-2)}',
+      '.dbc-tip-row{display:flex;align-items:flex-start;gap:7px;min-width:0;padding:2px 0;font-size:11px;line-height:14px}',
+      '.dbc-tip-dot{flex:0 0 auto;width:5px;height:5px;margin-top:4px;border-radius:50%;background:currentColor;opacity:.45}',
+      '.dbc-tip-dot-ok{background:var(--dbc-green);opacity:1}',
+      '.dbc-tip-dot-warn{background:var(--dbc-amber);opacity:1}',
+      '.dbc-tip-label{flex:0 0 auto;color:var(--dbc-ink-3);white-space:nowrap}',
+      '.dbc-tip-amount{flex:0 1 auto;min-width:0;margin-left:auto;font-weight:500;text-align:right;white-space:pre-line;overflow-wrap:anywhere}',
+      '.dbc-tip-note{margin-top:2px;color:var(--dbc-ink-3);font-size:11px;line-height:14px;white-space:pre-line}',
+      '.dbc-tip-arrow{position:absolute;top:auto;bottom:-4px;width:8px;height:8px;transform:rotate(225deg);background:var(--dbc-surface);border-left:1px solid color-mix(in srgb,var(--dbc-ink-1) 10%,transparent);border-top:1px solid color-mix(in srgb,var(--dbc-ink-1) 10%,transparent)}',
+      '.dbc-tip-below .dbc-tip-arrow{top:-4px;bottom:auto;transform:rotate(45deg)}',
     ].join('');
     //#endregion
 
@@ -653,6 +674,19 @@ window.__ModuleLoader__.load({
         h('path', { key: 'marks', d: 'M8 2v4M16 2v4M3 10h18' }),
       );
     }
+
+    /**
+     * A Beijing calendar day number (days since the epoch, as `beijingDay` and the
+     * calendar payload use it) as `M/D`, the form the holiday strip shows.
+     * @param day - the numeric day number.
+     */
+    function monthDay(day) {
+      const date = new Date(day * DAY_MS);
+      return date.getUTCMonth() + 1 + '/' + date.getUTCDate();
+    }
+
+    /** Amounts longer than this many characters drop one size instead of clipping. */
+    const AMOUNT_SMALL_AT = 12;
 
     //#region component
     /**
@@ -880,7 +914,7 @@ window.__ModuleLoader__.load({
       const live = prices[currency] === undefined ? null : prices[currency];
       const rates = live === null ? PRICE_SNAPSHOT[currency] : live;
       const calendar = remote.holidays !== null ? remote.holidays : BUILTIN_CALENDAR;
-      const holidaySource = tr(calendar === BUILTIN_CALENDAR ? 'card.schedule.builtin' : 'card.schedule.source');
+      const holidaySource = tr(calendar === BUILTIN_CALENDAR ? 'card.tip.calendar.builtin' : 'card.tip.calendar.icloud');
 
       const period = periodAt(now, calendar.days);
       const peak = period === 'peak';
@@ -924,16 +958,6 @@ window.__ModuleLoader__.load({
       const amount = numberFormatter(locale, 2);
       const price = priceFormatter(locale);
       const tier = peak ? 'peak' : 'idle';
-      const unit =
-        tr('card.unit.short.' + currency) + ' · ' + tr(tier === 'peak' ? 'card.tier.peak' : 'card.tier.idle');
-      const unitTitle =
-        tr('card.unit.long.' + currency) +
-        ' · ' +
-        tr('card.snapshot') +
-        ' ' +
-        rates.asOf +
-        ' · ' +
-        tr(rates === PRICE_SNAPSHOT[currency] ? 'card.snapshot.builtin' : 'card.snapshot.live');
 
       // Calendar labels. The calendar names its days in Chinese, so they stay in
       // the Chinese interface; an English card would otherwise mix languages.
@@ -948,17 +972,24 @@ window.__ModuleLoader__.load({
       // a day that is a holiday cannot also be a day you work to make up for it.
       const makeupName =
         !calendar.days.has(today) && chinese ? named(calendar.makeupNames, today) : null;
-      // The banner reads "国庆节假期中", and joins two occasions with a spaced "&".
-      const holidayBanner =
-        holidayName === null ? null : holidayName.split('、').join(' & ') + tr('card.holiday.banner');
-      const makeupTitle =
-        makeupName === null
-          ? undefined
-          : {
-              title: '🔁 ' + tr('card.makeup') + ' · ' + makeupName,
-              rows: [],
-              note: tr('card.makeup.tooltip') + ' ' + tr('card.makeup.billing'),
-            };
+      // The strip names the occasion, then the date and the all-day rate on the
+      // right: "国庆节  10/1 · 空闲全天". Two occasions join with "、".
+      const holidayBanner = holidayName;
+      const holidayMeta =
+        holidayName === null ? null : monthDay(today) + ' · ' + tr('card.holiday.idle');
+      const makeupTip = makeupName === null ? null : { note: tr('card.tip.makeup') };
+
+      // The billing window is a rule, so the bubble lists all three of its facts:
+      // the peak window, everything the peak leaves idle, and who publishes the
+      // calendar that decides which days are excepted.
+      const periodTip = {
+        rows: [
+          { label: tr('card.period.peak'), text: tr('card.tip.peakWindow') },
+          { label: tr('card.period.idle'), text: tr('card.tip.idleWindow') },
+          { label: tr('card.tip.calendar'), text: holidaySource },
+        ],
+        note: tr('card.tip.windowNote'),
+      };
 
       // Two balances, one headline. The provider decides which one is the truth:
       // DeepSeek's own provider bills the open platform, every other provider is
@@ -1002,19 +1033,18 @@ window.__ModuleLoader__.load({
         if (toppedUp !== null) {
           rows.push({
             tone: 'ok',
-            badge: tr('card.balance.toppedUp'),
+            label: tr('card.balance.toppedUp'),
             text: walletMoney(apiBalance.currency, apiBalance.toppedUp),
           });
         }
         if (granted !== null) {
           rows.push({
             tone: 'warn',
-            badge: tr('card.balance.granted'),
+            label: tr('card.balance.granted'),
             text: walletMoney(apiBalance.currency, apiBalance.granted),
           });
         }
-        rows.push({ tone: 'total', badge: tr('card.balance.total'), text: walletMoney(apiBalance.currency, apiBalance.total) });
-        balanceHint = { title: '💰 ' + tr('card.title.api'), rows, note: tr('card.balance.hint.api') };
+        balanceHint = { rows, note: tr('card.balance.hint.api') };
         const shaped = headline(apiBalance.currency, apiBalance.total);
         if (shaped.main !== undefined) balanceMain = shaped.main;
         else balanceNote = shaped.note;
@@ -1033,19 +1063,14 @@ window.__ModuleLoader__.load({
         for (const wallet of account.wallets) {
           rows.push({
             tone: 'ok',
-            badge: tr('card.balance.toppedUp'),
+            label: tr('card.balance.toppedUp'),
             text: walletMoney(wallet.currency, wallet.balance),
           });
         }
         for (const wallet of account.bonus) {
-          rows.push({ tone: 'warn', badge: tr('card.bonus'), text: walletMoney(wallet.currency, wallet.balance) });
+          rows.push({ tone: 'warn', label: tr('card.bonus'), text: walletMoney(wallet.currency, wallet.balance) });
         }
-        rows.push({ tone: 'total', badge: tr('card.balance.total'), text: walletMoney(total.currency, total.text) });
-        balanceHint = {
-          title: '💰 ' + tr('card.title'),
-          rows,
-          note: tr(total.includesBonus ? 'card.balance.hintBonus' : 'card.balance.hint'),
-        };
+        balanceHint = { rows, note: tr(total.includesBonus ? 'card.balance.hintBonus' : 'card.balance.hint') };
         const shaped = headline(total.currency, total.text);
         if (shaped.main !== undefined) balanceMain = shaped.main;
         else balanceNote = shaped.note;
@@ -1091,12 +1116,30 @@ window.__ModuleLoader__.load({
         countdown = prefix + ' ' + days + split.clock;
       }
 
-      const modelLabel =
-        activeId !== null ? (activeName !== null ? activeName : activeId) : model.kind === 'failed' ? '—' : tr('card.balance.loading');
-      const modelTitle = {
-        title: '🏷️ ' + modelLabel,
-        rows: [],
-        note: activeId === null ? unitTitle : activeId + ' · ' + unitTitle,
+      const unknown = model.kind === 'failed' ? '—' : tr('card.balance.loading');
+      const modelLabel = activeId !== null ? (activeName !== null ? activeName : activeId) : unknown;
+      // The provider names the row above the model. Its display name comes from
+      // the catalogue; an id the catalogue does not know stands in for it.
+      const providerLabel =
+        activeProvider === null
+          ? unknown
+          : model.kind === 'ready' && typeof model.providers[activeProvider] === 'string'
+            ? model.providers[activeProvider]
+            : activeProvider;
+      // The bubble is the only place with room to say what the price block means, so
+      // it states the four facts a quote needs: which id, in what unit, from which
+      // snapshot date, and whether those numbers were fetched at startup or are the
+      // built-in copy. The tier sits on the card, one line above, so it is not repeated.
+      const modelTip = {
+        rows: [
+          { label: tr('card.tip.model'), text: activeId === null ? modelLabel : activeId },
+          { label: tr('card.tip.unit'), text: tr('card.unit.long.' + currency) },
+          { label: tr('card.tip.snapshot'), text: rates.asOf },
+          {
+            label: tr('card.tip.sync'),
+            text: tr(rates === PRICE_SNAPSHOT[currency] ? 'card.snapshot.builtin' : 'card.snapshot.live'),
+          },
+        ],
       };
       const priceValues =
         official && priced !== null && priced.entry !== null
@@ -1107,66 +1150,207 @@ window.__ModuleLoader__.load({
             ]
           : null;
 
-      /**
-       * Builds the hover body: a title line, one line per fact, and a footnote.
-       * Wallet lines carry a colored badge, so a glance says which kind of money
-       * a number is; the bubble is capped so long sentences wrap.
-       */
-      const tipBody = (spec) => {
-        const body = typeof spec === 'string' ? { title: spec, rows: [], note: null } : spec;
-        const rows = body.rows || [];
-        return h(
-          'span',
-          { className: 'dbc-tip' },
-          h('span', { key: 'title', className: 'dbc-tip-title' }, body.title),
-          rows.map((row, index) =>
-            h(
-              'span',
-              { key: 'row' + index, className: 'dbc-tip-row' },
-              row.badge ? h('span', { className: 'dbc-tip-badge dbc-tip-badge-' + row.tone }, row.badge) : null,
-              h('span', { className: row.badge ? 'dbc-tip-amount' : 'dbc-tip-line' }, row.text),
-            ),
-          ),
-          body.note ? h('span', { key: 'note', className: 'dbc-tip-note' }, body.note) : null,
+      //#region hover bubble
+      /* The bubble is a child of the card and fixed-positioned, so the sidebar's
+       * overflow cannot clip it and no portal is needed. Placing it here instead of
+       * borrowing the host tooltip keeps its surface in this card's palette: paper in
+       * the light theme, charcoal in the dark one. */
+      const [tipSpec, setTipSpec] = useState(null);
+      const [tipAnchor, setTipAnchor] = useState(null);
+      const [tipBox, setTipBox] = useState(null);
+      const tipRef = useRef(null);
+      const tipTimer = useRef(0);
+      const tipArmed = useRef(false);
+
+      const hideTip = () => {
+        tipArmed.current = false;
+        if (tipTimer.current !== 0) {
+          clearTimeout(tipTimer.current);
+          tipTimer.current = 0;
+        }
+        setTipSpec(null);
+        setTipAnchor(null);
+        setTipBox(null);
+      };
+
+      /** Arms the bubble after a dwell. The trigger rect is read when the pointer
+       * lands, so a scrolling sidebar cannot make the bubble chase the word. */
+      const showTip = (spec, target, delay) => {
+        if (spec === null || spec === undefined || target === null || target === undefined) return;
+        if (target === null || typeof target !== 'object' || typeof target.getBoundingClientRect !== 'function') {
+          return;
+        }
+        if (typeof setTimeout !== 'function') return;
+        const box = target.getBoundingClientRect();
+        tipArmed.current = true;
+        if (tipTimer.current !== 0) clearTimeout(tipTimer.current);
+        tipTimer.current = setTimeout(
+          () => {
+            tipTimer.current = 0;
+            if (!tipArmed.current) return;
+            setTipAnchor({ left: box.left, right: box.right, top: box.top, bottom: box.bottom });
+            setTipSpec(spec);
+          },
+          delay === undefined ? TIP_DELAY_MS : delay,
         );
       };
 
-      /**
-       * Wraps a node in the DSH tooltip after a short hover delay; without the
-       * primitive -- the offline harness -- the native title attribute stays.
-       */
-      const tip = (node, spec) => {
-        const title = spec === null || spec === undefined ? '' : typeof spec === 'string' ? spec : spec.title;
-        if (title === '') return node;
-        if (Tooltip === null) {
-          const text =
-            typeof spec === 'string'
-              ? spec
-              : [spec.title]
-                  .concat((spec.rows || []).map((row) => (row.badge ? row.badge + ' ' + row.text : row.text)))
-                  .concat(spec.note ? [spec.note] : [])
-                  .join('\n');
-          return h(node.tag, Object.assign({}, node.props, { title: text }), node.children);
-        }
-        return h(Tooltip, {
-          label: tipBody(spec),
-          side: 'top',
-          align: 'start',
-          maxWidth: TOOLTIP_MAX_WIDTH,
-          delayMs: TOOLTIP_DELAY_MS,
-          focusDelayMs: TOOLTIP_FOCUS_DELAY_MS,
-        }, node);
-      };
+      /** Turns a node into a trigger: pointer, keyboard, and the dashed underline
+       * that advertises both. */
+      const tipTrigger = (spec) =>
+        spec === null || spec === undefined
+          ? {}
+          : {
+              'data-dbc-tip': 'trigger',
+              tabIndex: 0,
+              onMouseEnter: (event) => showTip(spec, event.currentTarget),
+              onMouseLeave: hideTip,
+              onFocus: (event) => showTip(spec, event.currentTarget, TIP_FOCUS_DELAY_MS),
+              onBlur: hideTip,
+              // Escape reaches the trigger when it holds focus; a pointer user who
+              // never focused anything is caught by the window listener instead.
+              onKeyDown: (event) => {
+                if (event.key === 'Escape') hideTip();
+              },
+            };
 
-      const balanceBody =
-        balanceMain === null
-          ? h('span', { className: 'dbc-note' }, balanceNote)
+      // Measured before paint: above the trigger when it fits, below when it does
+      // not, clamped into the viewport, with the arrow still pointing at the word.
+      useLayoutEffect(() => {
+        if (tipSpec === null || tipAnchor === null) return;
+        if (typeof window === 'undefined') return;
+        const bubble = tipRef.current;
+        if (bubble === null || bubble === undefined) return;
+        const width = bubble.offsetWidth;
+        const height = bubble.offsetHeight;
+        if (!width || !height) return;
+        const viewport = window.innerWidth || 0;
+        // The bubble centres on the word it explains; the arrow then points at that
+        // word's centre by construction, and only drifts when the bubble has to be
+        // pushed back inside the viewport.
+        const centre = (tipAnchor.left + tipAnchor.right) / 2;
+        let left = centre - width / 2;
+        if (left + width > viewport - TIP_EDGE_PX) left = viewport - TIP_EDGE_PX - width;
+        if (left < TIP_EDGE_PX) left = TIP_EDGE_PX;
+        let top = tipAnchor.top - height - TIP_GAP_PX;
+        let below = false;
+        if (top < TIP_EDGE_PX) {
+          top = tipAnchor.bottom + TIP_GAP_PX;
+          below = true;
+        }
+        // The diamond is 9 px wide, so its apex sits 4.5 px into its own box. When the
+        // trigger's centre is so close to the viewport edge that the bubble had to be
+        // pushed away, the apex can no longer reach the word; a pointer that lands
+        // beside its anchor is worse than no pointer, so it is dropped instead.
+        const reach = width - TIP_ARROW_EDGE_PX - TIP_ARROW_APEX_PX;
+        const rawArrow = centre - left - TIP_ARROW_APEX_PX;
+        const pointed = rawArrow >= -TIP_ARROW_APEX_PX + TIP_ARROW_EDGE_PX - TIP_ARROW_APEX_PX && rawArrow <= reach;
+        const arrow = Math.min(Math.max(rawArrow, TIP_ARROW_EDGE_PX - TIP_ARROW_APEX_PX), reach);
+        const next = {
+          left: Math.round(left),
+          top: Math.round(top),
+          below,
+          pointed,
+          arrow: Math.round(arrow),
+        };
+        if (
+          tipBox === null ||
+          tipBox.left !== next.left ||
+          tipBox.top !== next.top ||
+          tipBox.below !== next.below ||
+          tipBox.pointed !== next.pointed ||
+          tipBox.arrow !== next.arrow
+        ) {
+          setTipBox(next);
+        }
+      });
+
+      useEffect(() => {
+        if (tipSpec === null || typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+          return undefined;
+        }
+        const onKey = (event) => {
+          if (event.key === 'Escape') hideTip();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+      }, [tipSpec]);
+
+      // `position: fixed` resolves against the viewport only while no ancestor
+      // establishes a containing block — a transform, a filter or `will-change`
+      // anywhere above the card does. So the bubble is re-measured after paint and
+      // shifted by whatever the browser actually did, and the pointer is recomputed
+      // against the corrected box: the apex keeps pointing at the word either way.
+      useLayoutEffect(() => {
+        if (tipSpec === null || tipBox === null || tipAnchor === null) return;
+        const bubble = tipRef.current;
+        if (bubble === null || bubble === undefined) return;
+        const rect = bubble.getBoundingClientRect();
+        const dx = tipBox.left - rect.left;
+        const dy = tipBox.top - rect.top;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+        // A runaway offset means the card itself is moving under the bubble; leave
+        // the placement alone rather than chase it.
+        if (Math.abs(dx) > 200 || Math.abs(dy) > 200) return;
+        const left = Math.round(tipBox.left + dx);
+        const centre = (tipAnchor.left + tipAnchor.right) / 2;
+        const width = bubble.offsetWidth;
+        const reach = width - TIP_ARROW_EDGE_PX - TIP_ARROW_APEX_PX;
+        const raw = centre - left - TIP_ARROW_APEX_PX;
+        const pointed = raw >= -TIP_ARROW_APEX_PX + TIP_ARROW_EDGE_PX - TIP_ARROW_APEX_PX && raw <= reach;
+        const arrow = Math.min(Math.max(raw, TIP_ARROW_EDGE_PX - TIP_ARROW_APEX_PX), reach);
+        setTipBox({
+          left,
+          top: Math.round(tipBox.top + dy),
+          below: tipBox.below,
+          pointed,
+          arrow: Math.round(arrow),
+        });
+      }, [tipSpec, tipAnchor, tipBox]);
+
+      const tipNode =
+        tipSpec === null
+          ? null
           : h(
               'span',
-              { className: 'dbc-balance' },
-              balanceMain.code === null ? null : h('span', { className: 'dbc-code' }, balanceMain.code + ' '),
-              balanceMain.text,
+              {
+                key: 'dbc-tip',
+                ref: tipRef,
+                className: 'dbc-tip' + (tipBox !== null && tipBox.below ? ' dbc-tip-below' : ''),
+                role: 'tooltip',
+                style:
+                  tipBox === null
+                    ? { left: '0px', top: '0px', visibility: 'hidden' }
+                    : { left: tipBox.left + 'px', top: tipBox.top + 'px' },
+              },
+              // Rendered in every state so the bubble's child order stays fixed; a
+              // pointer that cannot reach its word is hidden rather than misplaced.
+              h('span', {
+                key: 'arrow',
+                className: 'dbc-tip-arrow',
+                style:
+                  tipBox === null
+                    ? { display: 'none' }
+                    : { left: tipBox.arrow + 'px', display: tipBox.pointed ? undefined : 'none' },
+              }),
+              (tipSpec.rows || []).map((row, index) =>
+                h(
+                  'span',
+                  { key: 'row' + index, className: 'dbc-tip-row' },
+                  row.tone ? h('span', { className: 'dbc-tip-dot dbc-tip-dot-' + row.tone }) : null,
+                  h('span', { className: 'dbc-tip-label' }, row.label),
+                  h('span', { className: 'dbc-tip-amount' }, row.text),
+                ),
+              ),
+              (tipSpec.rows || []).length > 0 && tipSpec.note !== undefined && tipSpec.note !== null
+                ? h('span', { key: 'rule', className: 'dbc-tip-rule' })
+                : null,
+              tipSpec.note === undefined || tipSpec.note === null
+                ? null
+                : h('span', { key: 'note', className: 'dbc-tip-note' }, tipSpec.note),
             );
+      //#endregion
+
       const pricedNode =
         priceValues === null
           ? h(
@@ -1187,6 +1371,20 @@ window.__ModuleLoader__.load({
               ),
             );
 
+      // One visual row per fact: label line, amount line, provider line, model
+      // line, price block. The amount never shares a line with the countdown, so
+      // a six-digit balance and a two-week countdown can both be complete.
+      const amountText = balanceMain === null ? null : balanceMain.text;
+      const amountRow =
+        amountText === null
+          ? h('div', { className: 'dbc-amount' }, h('span', { className: 'dbc-note' }, balanceNote))
+          : h(
+              'div',
+              { className: 'dbc-amount' + (amountText.length > AMOUNT_SMALL_AT ? ' dbc-amount-small' : '') },
+              balanceMain.code === null ? null : h('span', { className: 'dbc-code' }, balanceMain.code),
+              amountText,
+            );
+
       return h(
         Fragment,
         null,
@@ -1203,7 +1401,8 @@ window.__ModuleLoader__.load({
                   'div',
                   { className: 'dbc-holiday' },
                   holidayIcon(),
-                  h('span', { className: 'dbc-holiday-text' }, holidayBanner),
+                  h('span', { className: 'dbc-holiday-text', title: holidayBanner }, holidayBanner),
+                  holidayMeta === null ? null : h('span', { className: 'dbc-holiday-meta' }, holidayMeta),
                 ),
             // The trigger is the label, not the row: hovering a number should never
             // open an explanation, and a row-wide anchor makes the bubble sit flat
@@ -1211,42 +1410,46 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { className: 'dbc-head' },
-              tip(h('span', { className: 'dbc-title dbc-tip-trigger' }, tr(titleKey)), balanceHint),
-              balanceBody,
-            ),
-            h(
-              'div',
-              { className: 'dbc-status' },
+              h(
+                'span',
+                Object.assign({ className: 'dbc-title dbc-tip-trigger' }, tipTrigger(balanceHint)),
+                tr(titleKey),
+              ),
               h(
                 'span',
                 { className: 'dbc-chips' },
-                tip(
-                  h(
-                    'span',
-                    { className: 'dbc-chip dbc-chip-' + tier },
-                    h('span', { className: 'dbc-dot', 'aria-hidden': 'true' }),
-                    tr(peak ? 'card.period.peak' : 'card.period.idle'),
-                  ),
-                  {
-                    title: '⏱️ ' + tr(peak ? 'card.period.peak' : 'card.period.idle'),
-                    rows: [],
-                    note: tr('card.schedule') + ' · ' + holidaySource,
-                  },
+                h(
+                  'span',
+                  Object.assign({ className: 'dbc-chip dbc-chip-' + tier }, tipTrigger(periodTip)),
+                  h('span', { className: 'dbc-dot', 'aria-hidden': 'true' }),
+                  tr(peak ? 'card.period.peak' : 'card.period.idle'),
                 ),
                 makeupName === null
                   ? null
-                  : tip(h('span', { className: 'dbc-chip dbc-chip-makeup' }, tr('card.makeup')), makeupTitle),
+                  : h(
+                      'span',
+                      Object.assign({ className: 'dbc-chip dbc-chip-makeup' }, tipTrigger(makeupTip)),
+                      tr('card.makeup'),
+                    ),
               ),
-              countdown === null ? null : h('span', { className: 'dbc-countdown' }, countdown),
             ),
-            h('div', { className: 'dbc-sep', 'aria-hidden': 'true' }),
+            amountRow,
+            // Provider and countdown share a line because both are short; the
+            // countdown keeps its "to peak / to idle" wording and takes the
+            // current period's colour, so it cannot be mistaken for a duration.
             h(
               'div',
-              { className: 'dbc-model' },
-              tip(h('span', { className: 'dbc-model-name dbc-tip-trigger' }, modelLabel), modelTitle),
-              h('span', { className: 'dbc-tier' }, unit),
+              { className: 'dbc-mrow' },
+              h('span', { className: 'dbc-provider' }, providerLabel),
+              countdown === null ? null : h('span', { className: 'dbc-clock dbc-clock-' + tier }, countdown),
+            ),
+            h(
+              'span',
+              Object.assign({ className: 'dbc-model dbc-tip-trigger' }, tipTrigger(modelTip)),
+              modelLabel,
             ),
             pricedNode,
+            tipNode,
           ),
         ),
       );
@@ -1314,13 +1517,25 @@ window.__ModuleLoader__.load({
       }
       const current = catalog.default;
       const groups = Array.isArray(catalog.groups) ? catalog.groups : [];
+      const failures = Array.isArray(catalog.failures) ? catalog.failures : [];
       // Prototype-free so a model id can never collide with Object keys.
       const names = Object.create(null);
+      // The card names the provider above the model, so the catalogue's display
+      // name is read here as well; a failed provider still carries its name.
+      const providers = Object.create(null);
       for (const group of groups) {
+        if (typeof group.id === 'string' && group.id !== '' && typeof group.name === 'string' && group.name !== '') {
+          providers[group.id] = group.name;
+        }
         const models = Array.isArray(group.models) ? group.models : [];
         for (const candidate of models) {
           if (typeof candidate.id !== 'string' || candidate.id === '') continue;
           if (typeof candidate.name === 'string' && candidate.name !== '') names[candidate.id] = candidate.name;
+        }
+      }
+      for (const failure of failures) {
+        if (typeof failure.id === 'string' && failure.id !== '' && typeof failure.name === 'string' && failure.name !== '') {
+          providers[failure.id] = failure.name;
         }
       }
       const id = typeof current.model === 'string' ? current.model : null;
@@ -1330,6 +1545,7 @@ window.__ModuleLoader__.load({
         id,
         name: id !== null && names[id] !== undefined ? names[id] : null,
         names,
+        providers,
       };
     }
 

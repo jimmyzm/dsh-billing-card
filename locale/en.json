@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "DeepSeek Billing Card",
-    "description": "Sidebar footer card with the account balance, the current model's input / cache-read / output unit prices (CNY in Chinese, USD in every other language), the live billing period with a countdown to the next switch, a statutory-holiday banner and make-up-workday label; prices and holidays refresh at every application start."
+    "description": "Sidebar footer card with the account balance, the provider and model, the current model's input / cached / output unit prices (CNY in Chinese, USD in every other language), the live billing period with a countdown to the next switch, a statutory-holiday strip and make-up-workday label; prices and holidays refresh at every application start."
   }
 }

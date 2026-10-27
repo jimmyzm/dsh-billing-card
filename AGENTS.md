@@ -55,24 +55,48 @@ Hover text is the card's only place for the long explanation, so it follows the 
 - One trigger per visual row, and the trigger is that row's **label**, not the row: the balance
   label explains the balance, the model name explains the unit and the snapshot, and each chip
   explains itself. A row-wide anchor makes the bubble hang off the card edge instead of the word it
-  belongs to, and fires while the pointer is over a number, which reads as accidental. Give the
-  trigger `dbc-tip-trigger` (cursor + dotted underline) so the affordance is visible. Never attach
-  the same label to two nested nodes, and never put a tooltip on the price block or the holiday
+  belongs to, and fires while the pointer is over a number, which reads as accidental. Give text
+  triggers `dbc-tip-trigger` (cursor + dotted underline, plus a focus ring) so the affordance is
+  visible; a chip is its own affordance and takes the handlers without the class. Never attach the
+  same label to two nested nodes, and never put a tooltip on the price block or the holiday
   banner — their text already says what they are.
-- The body is a spec `{title, rows, note}` rendered as a titled list: a title line, one line per
-  fact, and a footnote. Hover text appears after `delayMs: 400` (`focusDelayMs: 150` for
-  keyboard focus) in a bubble capped at `maxWidth: 248`, left-aligned with the row it explains
-  (`side: 'top'`, `align: 'start'`); the body caps at 232 px with 4/6 px of its own padding, so
-  long sentences wrap instead of running across the sidebar. Emoji lead the title (`💰` balance,
-  `⏱️` period, `🔁` make-up, `🏷️` model) — one per title, never inside a line.
-- A row may carry a tone badge: `ok` green = recharge money, `warn` yellow = bonus money, `total`
-  neutral = the sum. Every balance ends with `total`, including the open-platform balance — the
-  card never invents a separate kind for it. No badge means a plain sentence, not a wallet. Never
-  badge a row whose kind cannot be named.
-- The bubble is dark in **both** themes (its text colour comes from the primitive, not the
-  surface), so never colour text inside it with `--dsw-alias-label-*`: those tokens read as
-  muddy grey on the dark fill. Keep `color: inherit` and de-emphasise with `opacity` (lines
-  0.88, footnote 0.72); a badge is a translucent tint of its tone token with inherited text.
+- The card draws its own bubble. The host primitive was borrowed until 1.3: its surface is a fixed
+  dark plate in both themes, which pins one element of a card that owns its light/dark palette to
+  somebody else's chrome. Do not reintroduce `@deepseek-ai/dsh-client-ui-primitives`, and do not
+  hand the bubble back to a native `title` either — the platform text is unstyleable and cannot
+  hold a definition list.
+- The body is a spec `{rows, note?}` rendered as a definition list, because a tooltip in this card
+  always answers "what is this made of": one `label → value` row per fact (label 11 px in
+  `--dbc-ink-3`, value right-aligned on a shared edge, both tabular), then a hairline plus an 11 px
+  footnote in `--dbc-ink-3` for provenance. No head, no title, no total row: the card already shows
+  the number, and the bubble only decomposes it. A value may carry `\n` (the peak window is two
+  lines) — `.dbc-tip-amount` is `white-space:pre-line`, so a long value wraps right-aligned instead
+  of pushing the label off the edge.
+- Mechanics: `position:fixed` inside the card (no portal, so the sidebar cannot clip it), placed
+  before paint above the trigger, flipped below when there is no room, clamped `8 px` from the
+  viewport edge, with an 8 px diamond arrow on the edge **facing the trigger** — bottom edge and apex
+  down while the bubble sits above the word, top edge and apex up once it has flipped below. The
+  edge follows the placement; an arrow on the far side points away from what it explains. `z-index:2147483000` keeps it
+  above the shell's own layers. `pointer-events:none` means the pointer can never enter the bubble,
+  which is what makes leaving the trigger the only way it closes.
+- The pointer points at the trigger's **centre**, and it is measured, not assumed: the bubble
+  centres on that centre, and the arrow is placed at `centre - left - 4 px` because the apex of an
+  8 px diamond sits 4 px into its own box. Two rules keep it honest — a second pass re-measures
+  the painted bubble and shifts it by whatever the browser did (any ancestor with a `transform`,
+  `filter` or `will-change` turns `fixed` into a local coordinate system), and the arrow is dropped
+  rather than clamped when the trigger's centre ends up outside the bubble: a pointer that lands
+  beside its word is worse than no pointer. The pointer is deliberately quiet: 8 px, the bubble's
+  own fill, and a `10%` ink hairline on its two outer edges — no `--dbc-line-2`, no drop shadow.
+  The bubble's shadow already separates it from the sidebar; adding another one to the notch turns
+  a hint into a badge.
+- Timing: `TIP_DELAY_MS = 240` on hover, `TIP_FOCUS_DELAY_MS = 90` on keyboard focus, cancelled by
+  leave, blur, or `Escape` (listened for on the window, so the card does not need focus).
+- A row may carry a tone **dot** (5 px, not a pill): `ok` green = recharge money, `warn` yellow =
+  bonus money. A row without a dot is a plain fact. Pills were tried and dropped: at 11 px they read
+  as cramped labels and their widths made the amounts miss the shared right edge.
+- The bubble uses the card's own tokens (`--dbc-surface`, `--dbc-line`, `--dbc-ink-1/3`,
+  `--dbc-green`, `--dbc-amber`), so it follows the theme like everything else. Never colour bubble
+  text with `--dsw-alias-*`.
 - The card and the bubble are not selectable (`user-select:none`): the numbers are read, not
   copied.
 - A balance tooltip describes only the balance on the headline: its composition and refresh
@@ -80,9 +104,6 @@ Hover text is the card's only place for the long explanation, so it follows the 
   a tooltip.
 - Provenance lives in one place: the calendar source belongs to the period chip, the price
   snapshot belongs to the model row.
-- Use the DSH primitive, `require('@deepseek-ai/dsh-client-ui-primitives').Tooltip`
-  (`label`, `side`, `align`, `maxWidth`), a platform seed module. The native `title` attribute is
-  only the fallback for the offline harness. Never hand-roll a hover bubble.
 
 ## Layout and compatibility guards
 
@@ -99,14 +120,52 @@ Hover text is the card's only place for the long explanation, so it follows the 
 - The Host half is cached per process: a change to `index.js` or `parse.js` needs a full app
   restart to take effect. `client.js` lands on a page refresh. Say which one you changed instead
   of claiming a change is live.
-- The Client half may only `require('react')` (rendering, `createElement`, no JSX) and the one
-  platform seed it needs for hover text, `@deepseek-ai/dsh-client-ui-primitives`. No other
-  module, no globals it does not guard.
-- Style only with `--dsw-alias-*` theme tokens, and only inside the card's own subtree. Never
-  restyle host or sibling plugin DOM, no iframe, no new npm dependency without an explicit OK.
+- The Client half may only `require('react')` (rendering, `createElement`, no JSX). No other
+  module, no globals it does not guard — the hover bubble is drawn here, so there is no platform
+  seed left to require.
+- The card owns its palette. `CARD_CSS` declares `--dbc-*` tokens on `.dbc-root` with
+  `light-dark(light, dark)` values; the app writes `color-scheme` on `<html>`
+  (`document.documentElement.style.colorScheme`), so the tokens resolve without reading a host
+  variable. Do not reintroduce `--dsw-alias-*` into the card: the one exception is the layout
+  the slot gives us, which the card never styles.
+- Style only inside the card's own subtree. Never restyle host or sibling plugin DOM, no iframe,
+  no new npm dependency without an explicit OK.
 - Every visible string needs a key in **both** dictionaries inside `client.js`
   (`//#region dictionaries`). `locale/zh.json` and `locale/en.json` carry plugin `meta` only
   (the name and description the plugin manager shows).
+
+## Design scale
+
+The card's CSS is a system, not a bag of values picked per element. Every value comes from
+these lists; to make something bigger, move it one step instead of inventing a half step.
+
+- **Token layer**: one palette on `.dbc-root` — `--dbc-surface` `-2` `-3`, `--dbc-line`,
+  `--dbc-ink-1` `-2` `-3`, `--dbc-green` `-green-bg`, `--dbc-amber` `-amber-bg`, `--dbc-blue`,
+  `--dbc-r-card` `-inner` `-tag`, `--dbc-font`. Every rule reads these, never a raw hex.
+- **Type**: `11 / 13 / 17 / 20 px` with line heights `14 / 16 / 22 / 25`. 11 is labels, meta,
+  provider, model and the countdown; 13 is a price value; 17 is the amount when it would
+  otherwise overflow; 20 is the amount. No `10.5px`, no `em`/`rem`.
+- **Weight**: `400` body, `500` for the two things a glance must catch (the model name and the
+  period chip), `650`+ for numbers that carry money.
+- **Spacing**: `12px` card padding, `8px 10px` for the price panel, `6px` flex gap, `5px`
+  inside the holiday strip, `4px` between chips. Space around a group exceeds space within it.
+- **Radius**: `14px` card, `10px` price panel, `8px` holiday strip, `6px` make-up tag, `999px`
+  chips.
+- **Layout is one row per fact**: label + chips, amount, provider + countdown, model, prices.
+  The amount never shares a line with the countdown — that pair is what clipped six-digit
+  balances at 196 px. Provider names are short, so the countdown rides on the provider line;
+  `.dbc-mrow` is `flex-wrap` anyway, so an unusually long provider pushes the countdown to its
+  own right-aligned line instead of clipping it.
+- **Contrast floor**: 4.5:1 for every text colour on the surface it lands on, in both themes.
+  Measured: `--dbc-ink-1` 17.8 / 15.0, `-ink-2` 7.3 / 10.4, `-ink-3` 5.1 / 7.0 (and 4.7 / 6.2 on
+  `-surface-2`), chip text 4.7 green / 4.6 amber on its own tint (7.5 / 7.7 dark), blue 6.7 /
+  8.0. Recompute before changing a hex; a prettier hue is not a reason to drop below 4.5.
+- **The countdown takes the current period's colour** (`--dbc-green` when idle, `--dbc-amber`
+  when peak), matching the chip it sits opposite, and it always carries its `距高峰` / `距空闲`
+  wording. A bare clock next to the model reads as a duration; do not drop the label.
+- **Truncation order**: the amount shrinks one step (`dbc-amount-small`) past
+  `AMOUNT_SMALL_AT` characters, the holiday name ellipsizes while its `M/D · 空闲全天` meta
+  stays, the model ellipsizes last. The countdown never truncates.
 
 ## Shape of the code
 

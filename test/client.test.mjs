@@ -83,6 +83,9 @@ const sandboxWindow = {
 globalThis.window = sandboxWindow;
 vm.runInThisContext(src, { filename: SOURCE });
 
+// There is one load: the card draws its own hover bubble, so the harness has no
+// platform primitive to supply and no second module instance to mount.
+
 // ---------------------------------------------------------------- fake context
 function makeContext({ balance = undefined, catalog = undefined, services = {}, activeLocale = 'zh' } = {}) {
   const registered = { slot: null, component: null, options: null, dictionaries: null, timers: [], events: [] };
@@ -147,7 +150,7 @@ function makeContext({ balance = undefined, catalog = undefined, services = {}, 
 }
 
 // ---------------------------------------------------------------- mount helper
-async function mount({ now, balance, catalog, services = liveServices().services, props = {}, data = null, onApply, onTimer, locale = 'zh', route = 'json' }) {
+async function mount({ now, balance, catalog, services = liveServices().services, props = {}, data = null, onApply, onTimer, locale = 'zh', route = 'json', api = installed }) {
   // The card asks the Host route on mount; `data` is its answer (or a failure).
   // `route` names the transport state instead: an absent `fetch` global, or a
   // route that answers 404.
@@ -171,7 +174,7 @@ async function mount({ now, balance, catalog, services = liveServices().services
     return realSetTimeout(fn, delay === 3000 ? 0 : delay, ...rest);
   };
   const { ctx, registered } = makeContext({ balance, catalog, services, activeLocale: locale });
-  installed.apply(ctx);
+  api.apply(ctx);
   if (typeof onApply === 'function') onApply(registered.dictionaries);
   if (typeof onTimer === 'function') onTimer(registered.timers);
 
@@ -181,6 +184,7 @@ async function mount({ now, balance, catalog, services = liveServices().services
     const allProps = { ...injected, wide: true, t: (key) => (registered.dictionaries?.zh?.[key] ?? key), ...props };
 
     // One React-like render pass, including the effects queued by it.
+    let latest = null;
     const pump = async () => {
       const realNow = Date.now;
       Date.now = () => now;
@@ -203,6 +207,7 @@ async function mount({ now, balance, catalog, services = liveServices().services
         if (!mountCtx.dirty) break;
       }
       Date.now = realNow;
+      latest = tree;
       return tree;
     };
     const tree = await pump();
@@ -212,7 +217,20 @@ async function mount({ now, balance, catalog, services = liveServices().services
     const dispose = () => {
       globalThis.fetch = realFetch;
     };
-    return { tree, registered, props: allProps, pump, delays, requests, dispose };
+    // The hover helpers below read the trigger from the newest tree: hook state
+    // survives a pump, so a bubble opened after a repaint must come from that
+    // repaint's handlers, not the first render's.
+    return {
+      get tree() {
+        return latest;
+      },
+      registered,
+      props: allProps,
+      pump,
+      delays,
+      requests,
+      dispose,
+    };
   }
 }
 
@@ -234,7 +252,10 @@ async function mountLocalized(language, options = {}) {
     },
     props: { ...(options.props ?? {}), t: (key) => state.dictionaries?.[bucket]?.[key] ?? key },
   });
-  return { ...handle, dictionaries: state.dictionaries };
+  // Mutating keeps `tree` a live getter, so a bubble opened after a repaint
+  // still finds that repaint's trigger.
+  handle.dictionaries = state.dictionaries;
+  return handle;
 }
 
 // ---------------------------------------------------------------- tree queries
@@ -255,6 +276,60 @@ function classes(tree) {
 function byClass(tree, name) {
   const hit = findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className.split(' ').includes(name));
   return hit.length === 0 ? null : hit[0];
+}
+// ------------------------------------------------------------- hover bubble
+/** A stable rect for the trigger: the bubble only needs a box to measure from. */
+const TRIGGER_BOX = { left: 40, right: 120, top: 300, bottom: 316 };
+/**
+ * Opens the bubble the card now draws itself and returns the tree it rendered
+ * into plus the `span.dbc-tip` node. `handle.tree` is the newest render, so the
+ * trigger carries the spec of the current state; the dwell timer is collapsed
+ * here because only the "hover bubble" block asserts the real delay.
+ */
+const openTip = async (handle, className) => {
+  const trigger = byClass(handle.tree, className);
+  if (trigger === null || trigger === undefined) return { tree: handle.tree, bubble: null };
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, _delay, ...rest) => realSetTimeout(fn, 0, ...rest);
+  try {
+    trigger.props.onMouseEnter({
+      currentTarget: { getBoundingClientRect: () => ({ ...TRIGGER_BOX }) },
+    });
+    const tree = await handle.pump();
+    return { tree, bubble: byClass(tree, 'dbc-tip') };
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+};
+/** The hover text of the trigger with `className`: one `label | value` line per
+ * row, then the note. */
+const tipOf = async (handle, className) => {
+  const { bubble } = await openTip(handle, className);
+  if (bubble === null) return undefined;
+  const lines = tipRows(bubble).map(
+    (row) => text(byClass(row, 'dbc-tip-label')) + ' | ' + text(byClass(row, 'dbc-tip-amount')),
+  );
+  const note = byClass(bubble, 'dbc-tip-note');
+  if (note !== null) lines.push(text(note));
+  return lines.join(' | ');
+};
+
+// ------------------------------------------------------- bubble body queries
+/** The `.dbc-tip-row` elements of a bubble, in order. */
+function tipRows(bubble) {
+  return findAll(bubble, (node) => node.props.className === 'dbc-tip-row');
+}
+/** The class list of a row's dot, or null when the row carries none. */
+function tipDotClass(row) {
+  const dot = byClass(row, 'dbc-tip-dot');
+  return dot === null ? null : dot.props.className;
+}
+/** Every `.dbc-tip-dot` in a bubble, whatever its tone. */
+function tipDots(bubble) {
+  return findAll(
+    bubble,
+    (node) => typeof node.props.className === 'string' && node.props.className.split(' ').includes('dbc-tip-dot'),
+  );
 }
 
 // ------------------------------------------------- selection service stubs
@@ -396,9 +471,9 @@ for (const [label, now, expectedPeriod, expectedCountdown] of CASES) {
   const chip = byClass(tree, 'dbc-chip');
   check(label + ' chip class', chip.props.className, 'dbc-chip dbc-chip-' + expectedPeriod);
   check(label + ' chip text', text(chip).trim(), expectedPeriod === 'peak' ? '高峰' : '空闲');
-  check(label + ' countdown', text(byClass(tree, 'dbc-countdown')), expectedCountdown);
-  check(label + ' balance', text(byClass(tree, 'dbc-balance')), '¥32.50');
-  check(label + ' model', text(byClass(tree, 'dbc-model-name')), 'DeepSeek-Flash');
+  check(label + ' countdown', text(byClass(tree, 'dbc-clock')), expectedCountdown);
+  check(label + ' balance', text(byClass(tree, 'dbc-amount')), '¥32.50');
+  check(label + ' model', text(byClass(tree, 'dbc-model')), 'DeepSeek-Flash');
   const values = findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-value').map(text);
   const expectedPrices =
     expectedPeriod === 'peak' ? ['2.00', '0.04', '8.00'] : ['1.00', '0.02', '4.00'];
@@ -421,15 +496,16 @@ for (const [label, balance, expected, expectedTitle] of [
   ['sub-cent-rounds-up-edge', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0.01' }], bonusWallets: [] } }, '¥0.01', null],
 ]) {
   const { tree } = await mount({ now: Date.parse('2026-10-25T16:52:00Z'), balance });
-  const note = byClass(tree, 'dbc-balance') || byClass(tree, 'dbc-note');
+  // The amount row always exists: an amount, or a single notice inside it.
+  const note = byClass(tree, 'dbc-amount');
   check(label + ' balance text', text(note), expected);
   // The headline label is the trigger, and only a real amount has anything to say.
   const head = byClass(tree, 'dbc-head');
   const trigger = byClass(tree, 'dbc-title');
-  check(label + ' row is not a trigger', head.props.title, undefined);
+  check(label + ' row is not a trigger', head.props['data-dbc-tip'], undefined);
   check(label + ' trigger is marked', trigger.props.className.split(' ').includes('dbc-tip-trigger'), true);
-  if (expectedTitle === undefined) check(label + ' tooltip is absent', trigger.props.title, undefined);
-  else check(label + ' tooltip is a string', typeof trigger.props.title, 'string');
+  if (expectedTitle === undefined) check(label + ' tooltip is absent', trigger.props['data-dbc-tip'], undefined);
+  else check(label + ' tooltip is a trigger', trigger.props['data-dbc-tip'], 'trigger');
   const values = findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-value').map(text);
   check(label + ' still prices model', values.length, 3);
 }
@@ -455,23 +531,28 @@ console.log('rail mode');
 
 console.log('english locale');
 {
-  const { tree } = await mountLocalized('en', {
+  const handle = await mountLocalized('en', {
     now: Date.parse('2026-10-25T16:52:00Z'),
     balance: READY_BALANCE,
     catalog: CATALOG,
   });
+  const { tree } = handle;
   check('en chip', text(byClass(tree, 'dbc-chip')).trim(), 'Idle');
-  check('en countdown', text(byClass(tree, 'dbc-countdown')), 'Peak in 08:08:00');
-  check('en title', text(byClass(tree, 'dbc-title')), 'DeepSeek balance');
-  check('en tier quotes USD', text(byClass(tree, 'dbc-tier')), '$/M · Idle price');
+  check('en countdown', text(byClass(tree, 'dbc-clock')), 'Peak in 08:08:00');
+  check('en title', text(byClass(tree, 'dbc-title')), 'Balance');
+  check('en tooltip quotes USD', (await tipOf(handle, 'dbc-model')).includes('USD per 1M tokens'), true);
   const values = findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-value').map(text);
   check('en prices come from the USD table', JSON.stringify(values), JSON.stringify(['0.15', '0.003', '0.60']));
   check('en price labels', JSON.stringify(findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-label').map(text)), JSON.stringify(['Input', 'Cache read', 'Output']));
-  const enModelParts = findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className.startsWith('dbc-model'));
-  const enModelTitle = enModelParts.map((n) => n.props.title).filter((value) => typeof value === 'string');
-  check('en unit tooltip names the currency', enModelTitle.some((value) => value.includes('USD per 1M tokens')), true);
-  check('en tier span has no tooltip of its own', byClass(tree, 'dbc-tier').props.title, undefined);
-  check('en balance spells its currency code', text(byClass(tree, 'dbc-balance')), 'CNY ¥32.50');
+  // The unit is no longer a row of its own: it lives inside the model bubble.
+  const triggers = findAll(
+    tree,
+    (n) => typeof n.props.className === 'string' && n.props.className.split(' ').includes('dbc-tip-trigger'),
+  ).map((n) => n.props.className);
+  check('en keeps one trigger per row', JSON.stringify(triggers), JSON.stringify(['dbc-title dbc-tip-trigger', 'dbc-model dbc-tip-trigger']));
+  check('en balance spells its currency code', text(byClass(tree, 'dbc-code')), 'CNY');
+  // The code span has no trailing space; the row's flex gap separates the two.
+  check('en amount follows the code', text(byClass(tree, 'dbc-amount')), 'CNY¥32.50');
 }
 
 console.log('timer cadence');
@@ -493,7 +574,7 @@ console.log('long countdown in english');
     balance: READY_BALANCE,
     catalog: CATALOG,
   });
-  check('en weekend countdown', text(byClass(tree, 'dbc-countdown')), 'Peak in 2d 15:00:00');
+  check('en weekend countdown', text(byClass(tree, 'dbc-clock')), 'Peak in 2d 15:00:00');
 }
 
 // ------------------------------------------------------------ new behaviour
@@ -517,97 +598,157 @@ const CATALOG_TWO = {
 const IDLE_NOW = Date.parse('2026-10-25T16:52:00Z');
 const priced = (tree) =>
   findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-value').map(text);
-const tipOf = (tree, className) => {
-  const node = byClass(tree, className);
-  if (node === null || node === undefined) return undefined;
-  if (typeof node.props.title === 'string') return node.props.title;
-  return findAll(node, (n) => typeof n.props.title === 'string').map((n) => n.props.title)[0];
-};
 const wallets = (recharge, bonus) => ({ ok: true, value: { status: 'ready', value: recharge, bonusWallets: bonus } });
 
 console.log('balance total');
 {
-  let { tree } = await mount({
+  let handle = await mount({
     now: IDLE_NOW,
     balance: wallets([{ currency: 'CNY', balance: '32.50' }], [{ currency: 'CNY', balance: '10.00' }]),
     catalog: CATALOG,
   });
-  check('total adds the bonus', text(byClass(tree, 'dbc-balance')), '¥42.50');
-  check('the price block carries no tooltip', byClass(tree, 'dbc-prices').props.title, undefined);
+  let { tree } = handle;
+  check('total adds the bonus', text(byClass(tree, 'dbc-amount')), '¥42.50');
+  check('the price block carries no tooltip', byClass(tree, 'dbc-prices').props['data-dbc-tip'], undefined);
   check(
-    'tooltip lists every wallet',
-    tipOf(tree, 'dbc-title'),
-    '💰 DeepSeek 余额\n充值 CNY ¥32.50\n赠送 CNY ¥10.00\n合计 CNY ¥42.50\nDSH 账号余额（充值 + 赠金合计），每 30 秒刷新',
+    'bubble lists every wallet',
+    await tipOf(handle, 'dbc-title'),
+    '充值 | CNY ¥32.50 | 赠送 | CNY ¥10.00 | DSH 账号余额（含赠金），每 30 秒刷新',
   );
-  check('the tooltip is a titled list', tipOf(tree, 'dbc-title').split('\n').length, 5);
-  check('the row is not a trigger', byClass(tree, 'dbc-head').props.title, undefined);
+  const accountTip = await tipOf(handle, 'dbc-title');
+  check('the bubble never repeats the total', accountTip.includes('合计') || accountTip.includes('42.50'), false);
+  check('the row is not a trigger', byClass(tree, 'dbc-head').props['data-dbc-tip'], undefined);
 
   // 0.06 + 0.01 is 0.06999999999999999 in floats: truncation would drop a cent.
-  ({ tree } = await mount({
+  handle = await mount({
     now: IDLE_NOW,
     balance: wallets([{ currency: 'CNY', balance: '0.06' }], [{ currency: 'CNY', balance: '0.01' }]),
     catalog: CATALOG,
-  }));
-  check('sum keeps every cent', text(byClass(tree, 'dbc-balance')), '¥0.07');
+  });
+  tree = handle.tree;
+  check('sum keeps every cent', text(byClass(tree, 'dbc-amount')), '¥0.07');
 
   // A bonus in another currency never renames the reported total.
-  ({ tree } = await mount({
+  handle = await mount({
     now: IDLE_NOW,
     balance: wallets([{ currency: 'USD', balance: '5.00' }], [{ currency: 'CNY', balance: '1.00' }]),
     catalog: CATALOG,
-  }));
-  check('recharge currency wins', text(byClass(tree, 'dbc-balance')), '$5.00');
+  });
+  tree = handle.tree;
+  check('recharge currency wins', text(byClass(tree, 'dbc-amount')), '$5.00');
   check(
     'foreign bonus still listed',
-    tipOf(tree, 'dbc-title'),
-    '💰 DeepSeek 余额\n充值 USD $5.00\n赠送 CNY ¥1.00\n合计 USD $5.00\nDSH 账号余额，每 30 秒刷新',
+    await tipOf(handle, 'dbc-title'),
+    '充值 | USD $5.00 | 赠送 | CNY ¥1.00 | DSH 账号余额，每 30 秒刷新',
   );
 
   // Bonus only: the total is the grant itself.
-  ({ tree } = await mount({
+  handle = await mount({
     now: IDLE_NOW,
     balance: wallets([], [{ currency: 'CNY', balance: '3.00' }]),
     catalog: CATALOG,
-  }));
-  check('bonus-only account', text(byClass(tree, 'dbc-balance')), '¥3.00');
+  });
+  tree = handle.tree;
+  check('bonus-only account', text(byClass(tree, 'dbc-amount')), '¥3.00');
 
   // Sub-cent totals keep the existing "under 0.01" wording.
-  ({ tree } = await mount({
+  handle = await mount({
     now: IDLE_NOW,
     balance: wallets([{ currency: 'CNY', balance: '0.001' }], [{ currency: 'CNY', balance: '0.002' }]),
     catalog: CATALOG,
-  }));
+  });
+  tree = handle.tree;
   check('sub-cent total', text(byClass(tree, 'dbc-note')), '¥不足 0.01');
+}
+
+console.log('amount row');
+{
+  // A long amount drops one size instead of clipping; a short one keeps the
+  // full size. The threshold is 12 characters (`AMOUNT_SMALL_AT`).
+  const wide = await mount({
+    now: IDLE_NOW,
+    balance: wallets([{ currency: 'CNY', balance: '12345678.90' }], []),
+    catalog: CATALOG,
+  });
+  check('a long amount shrinks', byClass(wide.tree, 'dbc-amount').props.className, 'dbc-amount dbc-amount-small');
+  check('a long amount keeps every digit', text(byClass(wide.tree, 'dbc-amount')), '¥12,345,678.90');
+  const short = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG });
+  check('a short amount keeps the full size', byClass(short.tree, 'dbc-amount').props.className, 'dbc-amount');
+}
+
+console.log('provider line');
+{
+  // The provider row names the catalogue entry, falls back to the raw id, and
+  // shows a dash when the catalogue could not be read at all.
+  const labelled = {
+    ok: true,
+    value: {
+      default: { provider: 'deepseek-account', model: 'DeepSeek-Flash' },
+      groups: [{ id: 'deepseek-account', name: 'DeepSeek', models: [{ id: 'DeepSeek-Flash', name: 'DeepSeek-Flash' }] }],
+    },
+  };
+  let { tree: named } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: labelled });
+  check('the provider row prints the catalogue name', text(byClass(named, 'dbc-provider')), 'DeepSeek');
+  check('the provider row is not a trigger', byClass(named, 'dbc-provider').props['data-dbc-tip'], undefined);
+
+  const { tree: bare } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG });
+  check('an id the catalogue does not name stands in', text(byClass(bare, 'dbc-provider')), 'deepseek-account');
+
+  const { tree: failed } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: { ok: false } });
+  check('a failed catalogue shows a dash', text(byClass(failed, 'dbc-provider')), '—');
+
+  // A provider the catalogue lists as failed still carries its display name.
+  const failedGroup = {
+    ok: true,
+    value: {
+      default: { provider: 'deepseek-account', model: 'DeepSeek-Flash' },
+      groups: [],
+      failures: [{ id: 'deepseek-account', name: 'DeepSeek' }],
+    },
+  };
+  const { tree: fallback } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: failedGroup });
+  check('a failed provider still names itself', text(byClass(fallback, 'dbc-provider')), 'DeepSeek');
+}
+
+console.log('price labels');
+{
+  const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG });
+  check(
+    'zh price labels',
+    JSON.stringify(findAll(tree, (n) => n.props.className === 'dbc-price-label').map(text)),
+    JSON.stringify(['输入', '缓存', '输出']),
+  );
 }
 
 console.log('live model switching');
 {
   const live = liveServices();
-  const { tree, pump } = await mount({
+  const handle = await mount({
     now: IDLE_NOW,
     balance: READY_BALANCE,
     catalog: CATALOG_TWO,
     services: live.services,
   });
-  check('unselected session keeps the default', text(byClass(tree, 'dbc-model-name')), 'DeepSeek-Flash');
+  const { tree, pump } = handle;
+  check('unselected session keeps the default', text(byClass(tree, 'dbc-model')), 'DeepSeek-Flash');
 
   live.select('session-1', { provider: 'deepseek-account', model: 'deepseek-v4-pro' });
   let next = await pump();
-  check('switch repaints the model', text(byClass(next, 'dbc-model-name')), 'DeepSeek-V4-Pro-0813');
+  check('switch repaints the model', text(byClass(next, 'dbc-model')), 'DeepSeek-V4-Pro-0813');
   check('switch repaints the prices', JSON.stringify(priced(next)), JSON.stringify(['4.50', '0.15', '13.50']));
-  check('switch keeps the idle tier', text(byClass(next, 'dbc-tier')), '¥/百万 · 空闲价');
+  check('switch keeps the unit in the tooltip', (await tipOf(handle, 'dbc-model')).includes('人民币元 / 百万 tokens'), true);
 
   // An alias resolves to the row it bills as.
   live.select('session-1', { provider: 'deepseek-account', model: 'deepseek-v4-flash' });
   next = await pump();
   check('alias repaints the prices', JSON.stringify(priced(next)), JSON.stringify(['1.00', '0.02', '4.00']));
-  check('alias shows the selected id', text(byClass(next, 'dbc-model-name')), 'deepseek-v4-flash');
+  check('alias shows the selected id', text(byClass(next, 'dbc-model')), 'deepseek-v4-flash');
 
   // Each session carries its own selection.
   live.select('session-2', { provider: 'deepseek-account', model: 'deepseek-v4-pro' });
   live.activate('session-2');
   next = await pump();
-  check('session switch follows its own selection', text(byClass(next, 'dbc-model-name')), 'DeepSeek-V4-Pro-0813');
+  check('session switch follows its own selection', text(byClass(next, 'dbc-model')), 'DeepSeek-V4-Pro-0813');
   check('session switch prices', JSON.stringify(priced(next)), JSON.stringify(['4.50', '0.15', '13.50']));
 
   // A model outside the snapshot says so instead of showing stale prices.
@@ -681,14 +822,14 @@ console.log('selection services appear late');
     services,
     onTimer: (list) => { timers = list; },
   });
-  check('starts on the catalog default', text(byClass(tree, 'dbc-model-name')), 'DeepSeek-Flash');
+  check('starts on the catalog default', text(byClass(tree, 'dbc-model')), 'DeepSeek-Flash');
   check('one-second retry while the services are absent', JSON.stringify(timers.map((t) => t.delay).sort((a, b) => a - b)), JSON.stringify([1000, 1000, 30000]));
 
   services.uiSession = live.services.uiSession;
   services.modelDirectories = live.services.modelDirectories;
   for (const timer of timers.filter((t) => t.delay === 1000)) timer.callback();
   const next = await pump();
-  check('late services attach', text(byClass(next, 'dbc-model-name')), 'DeepSeek-V4-Pro-0813');
+  check('late services attach', text(byClass(next, 'dbc-model')), 'DeepSeek-V4-Pro-0813');
   check('late services price the selection', JSON.stringify(priced(next)), JSON.stringify(['4.50', '0.15', '13.50']));
 }
 
@@ -747,30 +888,33 @@ const chipOf = (tree, kind) =>
 
 console.log('startup refresh');
 {
-  const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data: livePayload() });
+  const handle = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data: livePayload() });
+  const { tree } = handle;
   check('host prices replace the snapshot', JSON.stringify(priced(tree)), JSON.stringify(['0.99', '0.02', '4.00']));
-  check('unit tooltip marks the startup sync', tipOf(tree, 'dbc-model-name').includes('启动时校准'), true);
-  check('unit tooltip keeps the price date', tipOf(tree, 'dbc-model-name').includes('2026-10-26'), true);
+  check('unit tooltip marks the startup sync', (await tipOf(handle, 'dbc-model')).includes('启动时校准'), true);
+  check('unit tooltip keeps the price date', (await tipOf(handle, 'dbc-model')).includes('2026-10-26'), true);
 }
 
 {
-  const { tree } = await mount({
+  const handle = await mount({
     now: PEAK_NOW,
     balance: READY_BALANCE,
     catalog: CATALOG,
     data: livePayload({ holidays: { days: [dayOf(2026, 10, 26)], years: [2026] } }),
   });
+  const { tree } = handle;
   check('calendar holiday turns the peak idle', byClass(tree, 'dbc-chip').props.className, 'dbc-chip dbc-chip-idle');
-  check('chip tooltip names the calendar', byClass(tree, 'dbc-chip').props.title.includes('iCloud'), true);
+  check('chip tooltip names the calendar', (await tipOf(handle, 'dbc-chip')).includes('iCloud'), true);
 }
 
 {
-  const { tree, delays } = await mount({ now: PEAK_NOW, balance: READY_BALANCE, catalog: CATALOG, data: null });
+  const handle = await mount({ now: PEAK_NOW, balance: READY_BALANCE, catalog: CATALOG, data: null });
+  const { tree, delays } = handle;
   check('a missing route is asked a few times', delays.filter((delay) => delay === 3000).length, 2);
   check('no route keeps the snapshot prices', JSON.stringify(priced(tree)), JSON.stringify(['2.00', '0.04', '8.00']));
   check('no route keeps the built-in period', byClass(tree, 'dbc-chip').props.className, 'dbc-chip dbc-chip-peak');
-  check('unit tooltip marks the snapshot', tipOf(tree, 'dbc-model-name').includes('内置快照'), true);
-  check('chip tooltip marks the built-in table', byClass(tree, 'dbc-chip').props.title.includes('节假日依据内置表'), true);
+  check('unit tooltip marks the snapshot', (await tipOf(handle, 'dbc-model')).includes('内置快照'), true);
+  check('chip tooltip marks the built-in table', (await tipOf(handle, 'dbc-chip')).includes('内置节假日表'), true);
 }
 
 {
@@ -815,9 +959,12 @@ console.log('holiday banner');
   });
   const banner = byClass(tree, 'dbc-holiday');
   check('banner renders', banner !== null, true);
-  check('banner text', text(banner), '国庆节假期中');
+  // The strip names the occasion, not "in progress": the date and the all-day
+  // rate moved into their own right-aligned meta span.
+  check('banner text', text(byClass(tree, 'dbc-holiday-text')), '国庆节');
+  check('banner meta reads the date and the rate', text(byClass(tree, 'dbc-holiday-meta')), '10/1 · 空闲全天');
   check('banner class', banner.props.className, 'dbc-holiday');
-  check('banner carries no tooltip', banner.props.title, undefined);
+  check('banner carries no tooltip', banner.props['data-dbc-tip'], undefined);
   check('banner leads the card', byClass(tree, 'dbc-card').children[0].props.className, 'dbc-holiday');
   check('banner draws an icon', byClass(tree, 'dbc-holiday-icon') !== null, true);
   check('the holiday left the chip row', JSON.stringify(byClass(tree, 'dbc-chips').children.map((n) => n.props.className)), JSON.stringify(['dbc-chip dbc-chip-idle']));
@@ -827,17 +974,18 @@ console.log('holiday banner');
 {
   // 2026-10-10 is a make-up workday: gray chip, still billed as off-peak.
   const makeupDay = dayOf(2026, 10, 10);
-  const { tree } = await mount({
+  const handle = await mount({
     now: Date.parse('2026-10-10T02:30:00Z'),
     balance: READY_BALANCE,
     catalog: CATALOG,
     data: livePayload({ holidays: { days: [], names: {}, makeup: [makeupDay], makeupNames: { [makeupDay]: '国庆节' } } }),
   });
+  const { tree } = handle;
   const badge = chipOf(tree, 'makeup');
   check('make-up chip renders', badge !== null, true);
   check('make-up chip label', text(badge), '调休');
   check('make-up chip class', badge.props.className, 'dbc-chip dbc-chip-makeup');
-  check('make-up tooltip explains the billing', badge.props.title, '🔁 调休 · 国庆节\n调休工作日（班） 仍按空闲时段计费');
+  check('make-up bubble explains the billing', await tipOf(handle, 'dbc-chip-makeup'), '调休日按周末处理，全天不计高峰。');
   check('a make-up day stays idle', byClass(tree, 'dbc-chip').props.className, 'dbc-chip dbc-chip-idle');
   check('no banner on a make-up day', byClass(tree, 'dbc-holiday'), null);
 }
@@ -855,7 +1003,7 @@ console.log('holiday banner');
   const before = await mount({ now: Date.parse('2025-09-30T15:59:59Z'), balance: READY_BALANCE, catalog: CATALOG, data: null });
   check('no banner a second before the holiday', byClass(before.tree, 'dbc-holiday'), null);
   const after = await mount({ now: Date.parse('2025-09-30T16:00:00Z'), balance: READY_BALANCE, catalog: CATALOG, data: null });
-  check('the banner appears at Beijing midnight', text(byClass(after.tree, 'dbc-holiday')), '国庆节假期中');
+  check('the banner appears at Beijing midnight', text(byClass(after.tree, 'dbc-holiday-text')), '国庆节');
   check('and the holiday is already idle', byClass(after.tree, 'dbc-chip').props.className, 'dbc-chip dbc-chip-idle');
 }
 
@@ -863,21 +1011,21 @@ console.log('holiday banner');
   // The built-in table carries names too, so the chip survives a missing route.
   const { tree } = await mount({ now: Date.parse('2025-10-01T02:30:00Z'), balance: READY_BALANCE, catalog: CATALOG, data: null });
   const banner = byClass(tree, 'dbc-holiday');
-  check('built-in holiday banner', text(banner), '国庆节假期中');
-  check('the holiday banner has no tooltip', banner.props.title, undefined);
+  check('built-in holiday banner', text(byClass(tree, 'dbc-holiday-text')), '国庆节');
+  check('the holiday banner has no tooltip', banner.props['data-dbc-tip'], undefined);
 }
 
 {
   // Mid-Autumn falls inside National Day in 2025: one day, two names.
   const { tree } = await mount({ now: Date.parse('2025-10-06T02:30:00Z'), balance: READY_BALANCE, catalog: CATALOG, data: null });
-  check('overlapping holidays join with an ampersand', text(byClass(tree, 'dbc-holiday')), '国庆节 & 中秋节假期中');
+  check('overlapping holidays keep both names', text(byClass(tree, 'dbc-holiday-text')), '国庆节、中秋节');
 }
 
 {
   // The built-in make-up table labels its own gray chip.
-  const { tree } = await mount({ now: Date.parse('2026-10-10T02:30:00Z'), balance: READY_BALANCE, catalog: CATALOG, data: null });
-  check('built-in make-up chip', text(chipOf(tree, 'makeup')), '调休');
-  check('built-in make-up tooltip', chipOf(tree, 'makeup').props.title, '🔁 调休 · 国庆节\n调休工作日（班） 仍按空闲时段计费');
+  const handle = await mount({ now: Date.parse('2026-10-10T02:30:00Z'), balance: READY_BALANCE, catalog: CATALOG, data: null });
+  check('built-in make-up chip', text(chipOf(handle.tree, 'makeup')), '调休');
+  check('built-in make-up bubble', await tipOf(handle, 'dbc-chip-makeup'), '调休日按周末处理，全天不计高峰。');
 }
 
 {
@@ -898,17 +1046,19 @@ console.log('currency default');
   // Chinese locales read the CNY page; every other language reads the USD one.
   const cny = await mountLocalized('zh-CN', { now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG });
   check('a zh-CN card quotes CNY', JSON.stringify(priced(cny.tree)), JSON.stringify(['1.00', '0.02', '4.00']));
-  check('a zh-CN card keeps the bare symbol', text(byClass(cny.tree, 'dbc-balance')), '¥32.50');
-  check('a zh-CN card labels the unit', text(byClass(cny.tree, 'dbc-tier')), '¥/百万 · 空闲价');
+  check('a zh-CN card keeps the bare symbol', text(byClass(cny.tree, 'dbc-amount')), '¥32.50');
+  check('a zh-CN card carries no currency code', byClass(cny.tree, 'dbc-code'), null);
+  check('a zh-CN card names the unit in the tooltip', (await tipOf(cny, 'dbc-model')).includes('人民币元 / 百万 tokens'), true);
 
   for (const language of ['en', 'ja']) {
     const other = await mountLocalized(language, { now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG });
     check(language + ' quotes USD', JSON.stringify(priced(other.tree)), JSON.stringify(['0.15', '0.003', '0.60']));
-    check(language + ' spells the balance currency', text(byClass(other.tree, 'dbc-balance')), 'CNY ¥32.50');
+    check(language + ' spells the balance currency', text(byClass(other.tree, 'dbc-code')), 'CNY');
+    check(language + ' writes the amount after the code', text(byClass(other.tree, 'dbc-amount')), 'CNY¥32.50');
   }
 
   const japanese = await mountLocalized('ja', { now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG });
-  check('a non-chinese tooltip names USD', tipOf(japanese.tree, 'dbc-model-name').includes('USD per 1M tokens'), true);
+  check('a non-chinese tooltip names USD', (await tipOf(japanese, 'dbc-model')).includes('USD per 1M tokens'), true);
 }
 
 {
@@ -916,8 +1066,8 @@ console.log('currency default');
   const holidayDay = dayOf(2026, 10, 1);
   const data = livePayload({ holidays: { days: [holidayDay], names: { [holidayDay]: '国庆节' }, makeup: [], makeupNames: {} } });
   const cny = await mountLocalized('zh-CN', { now: Date.parse('2026-10-01T02:30:00Z'), balance: READY_BALANCE, catalog: CATALOG, data });
-  check('a zh-CN card shows the banner', text(byClass(cny.tree, 'dbc-holiday')), '国庆节假期中');
-  check('a zh-CN banner stays chinese', text(byClass(cny.tree, 'dbc-holiday')), '国庆节假期中');
+  check('a zh-CN card shows the banner', text(byClass(cny.tree, 'dbc-holiday-text')), '国庆节');
+  check('a zh-CN banner keeps its chinese meta', text(byClass(cny.tree, 'dbc-holiday-meta')), '10/1 · 空闲全天');
 
   const makeupDay = dayOf(2026, 10, 10);
   const makeupData = livePayload({ holidays: { days: [], names: {}, makeup: [makeupDay], makeupNames: { [makeupDay]: '国庆节' } } });
@@ -941,48 +1091,52 @@ console.log('balance follows the provider');
 {
   const live = liveServices();
   const data = livePayload({ deepseek: apiBalance() });
-  const { pump } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
+  const handle = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
+  const { pump } = handle;
 
   // deepseek-account bills at the official price table but is not the open
   // platform: the account balance leads, and the API balance is nowhere in its
   // tooltip.
   live.select('session-1', { provider: 'deepseek-account', model: 'deepseek-v4-pro' });
   let next = await pump();
-  check('a non-official provider leads with the account balance', text(byClass(next, 'dbc-balance')), '¥32.50');
-  check('and its title names the account', text(byClass(next, 'dbc-title')), 'DeepSeek 余额');
+  check('a non-official provider leads with the account balance', text(byClass(next, 'dbc-amount')), '¥32.50');
+  check('and its title names the account', text(byClass(next, 'dbc-title')), '余额');
   check(
-    'and its tooltip describes only the account',
-    tipOf(next, 'dbc-title'),
-    '💰 DeepSeek 余额\n充值 CNY ¥32.50\n赠送 CNY ¥0.00\n合计 CNY ¥32.50\nDSH 账号余额（充值 + 赠金合计），每 30 秒刷新',
+    'and its bubble describes only the account',
+    await tipOf(handle, 'dbc-title'),
+    '充值 | CNY ¥32.50 | 赠送 | CNY ¥0.00 | DSH 账号余额（含赠金），每 30 秒刷新',
   );
-  check('the account tooltip never mentions the API', tipOf(next, 'dbc-title').includes('开放平台'), false);
+  check('the account bubble never mentions the API', (await tipOf(handle, 'dbc-title')).includes('开放平台'), false);
 
   // Selecting the API-key provider moves the headline to the open-platform balance.
   live.select('session-1', { provider: 'deepseek-official', model: 'deepseek-chat' });
   next = await pump();
-  check('the API provider switches the amount', text(byClass(next, 'dbc-balance')), '¥110.00');
-  check('the API total is labelled 合计', tipOf(next, 'dbc-title').includes('合计 CNY ¥110.00'), true);
-  check('and the title follows', text(byClass(next, 'dbc-title')), 'DeepSeek API 余额');
+  check('the API provider switches the amount', text(byClass(next, 'dbc-amount')), '¥110.00');
+  // The headline states the total, so the bubble decomposes it and never repeats it
+  // as a row: the rows are exactly the parts that add up to it.
+  check('the API bubble never repeats the total as a row', (await tipOf(handle, 'dbc-title')).includes('110.00'), false);
+  check('and no row repeats the total', (await tipOf(handle, 'dbc-title')).includes('合计'), false);
+  check('and the title follows', text(byClass(next, 'dbc-title')), 'API 余额');
   check(
-    'and the tooltip is the API composition only',
-    tipOf(next, 'dbc-title'),
-    '💰 DeepSeek API 余额\n充值 CNY ¥100.00\n赠金 CNY ¥10.00\n合计 CNY ¥110.00\nDeepSeek 开放平台余额（API Key），每 30 秒刷新',
+    'and the bubble is the API composition only',
+    await tipOf(handle, 'dbc-title'),
+    '充值 | CNY ¥100.00 | 赠金 | CNY ¥10.00 | DeepSeek 开放平台余额，每 30 秒刷新',
   );
-  check('the API tooltip never mentions DSH', tipOf(next, 'dbc-title').includes('DSH'), false);
-  check('the API tooltip never lists the account bonus', tipOf(next, 'dbc-title').includes('赠送'), false);
-  check('the API tooltip never carries the account amount', tipOf(next, 'dbc-title').includes('¥32.50'), false);
+  check('the API bubble never mentions DSH', (await tipOf(handle, 'dbc-title')).includes('DSH'), false);
+  check('the API bubble never lists the account bonus', (await tipOf(handle, 'dbc-title')).includes('赠送'), false);
+  check('the API bubble never carries the account amount', (await tipOf(handle, 'dbc-title')).includes('¥32.50'), false);
 
   // Switching back is the same, in the other direction.
   live.select('session-1', { provider: 'deepseek-account', model: 'DeepSeek-Flash' });
   next = await pump();
-  check('switching back restores the account balance', text(byClass(next, 'dbc-balance')), '¥32.50');
-  check('and the account title', text(byClass(next, 'dbc-title')), 'DeepSeek 余额');
+  check('switching back restores the account balance', text(byClass(next, 'dbc-amount')), '¥32.50');
+  check('and the account title', text(byClass(next, 'dbc-title')), '余额');
 
   // The price gate is wider than the balance gate: `deepseek` still quotes the
   // official table while the account balance leads.
   live.select('session-1', { provider: 'deepseek', model: 'deepseek-v4-flash' });
   next = await pump();
-  check('deepseek still headlines the account', text(byClass(next, 'dbc-balance')), '¥32.50');
+  check('deepseek still headlines the account', text(byClass(next, 'dbc-amount')), '¥32.50');
   check('deepseek still shows the list price', priced(next).length, 3);
 }
 
@@ -998,12 +1152,12 @@ console.log('balance follows the provider');
     services: live.services,
     data: () => livePayload({ deepseek: ready ? apiBalance() : { status: 'unavailable' } }),
   });
-  check('the account balance leads before the switch', text(byClass(tree, 'dbc-balance')), '¥32.50');
+  check('the account balance leads before the switch', text(byClass(tree, 'dbc-amount')), '¥32.50');
 
   ready = true;
   live.select('session-1', { provider: 'deepseek-official', model: 'deepseek-chat' });
   const next = await pump();
-  check('the switch fetches the balance without waiting for a tick', text(byClass(next, 'dbc-balance')), '¥110.00');
+  check('the switch fetches the balance without waiting for a tick', text(byClass(next, 'dbc-amount')), '¥110.00');
   check(
     'and it asks the Host for a fresh amount',
     requests.some((url) => url === '/deepseek-billing-card/data?balance=refresh'),
@@ -1078,9 +1232,11 @@ console.log('balance follows the provider');
   const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
   const note = byClass(tree, 'dbc-note');
   check('an unavailable API balance is a notice', text(note), '未配置 API Key');
-  check('and is not dressed up as an amount', byClass(tree, 'dbc-balance'), null);
-  check('and the title stays the account one', text(byClass(tree, 'dbc-title')), 'DeepSeek 余额');
-  check('the notice carries no tooltip', note.props.title, undefined);
+  // The notice owns the amount row and nothing dresses it up as money.
+  check('and is not dressed up as an amount', JSON.stringify(byClass(tree, 'dbc-amount').children.map((n) => n.props.className)), JSON.stringify(['dbc-note']));
+  check('and the notice carries no currency code', byClass(tree, 'dbc-code'), null);
+  check('and the title stays the account one', text(byClass(tree, 'dbc-title')), '余额');
+  check('the notice carries no tooltip', note.props['data-dbc-tip'], undefined);
 }
 
 {
@@ -1091,8 +1247,8 @@ console.log('balance follows the provider');
   const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
   const note = byClass(tree, 'dbc-note');
   check('a failed API read is its own notice', text(note), '读取失败，稍后重试');
-  check('a failed API read keeps the account title', text(byClass(tree, 'dbc-title')), 'DeepSeek 余额');
-  check('the failed notice carries no tooltip', note.props.title, undefined);
+  check('a failed API read keeps the account title', text(byClass(tree, 'dbc-title')), '余额');
+  check('the failed notice carries no tooltip', note.props['data-dbc-tip'], undefined);
   check('and does not claim the key is missing', text(note).includes('未配置 API Key'), false);
 
   const en = await mountLocalized('en', {
@@ -1103,7 +1259,7 @@ console.log('balance follows the provider');
     data,
   });
   check('english reports the failed read too', text(byClass(en.tree, 'dbc-note')), 'read failed, retrying');
-  check('english failed notice has no tooltip', byClass(en.tree, 'dbc-note').props.title, undefined);
+  check('english failed notice has no tooltip', byClass(en.tree, 'dbc-note').props['data-dbc-tip'], undefined);
 }
 
 {
@@ -1112,24 +1268,25 @@ console.log('balance follows the provider');
   // before the key was configured.
   const live = liveServices({ 'session-1': { provider: 'deepseek-official', model: 'deepseek-chat' } });
   let ready = false;
-  const { tree, pump, registered } = await mount({
+  const handle = await mount({
     now: IDLE_NOW,
     balance: READY_BALANCE,
     catalog: CATALOG,
     services: live.services,
     data: () => livePayload({ deepseek: ready ? apiBalance() : { status: 'unavailable' } }),
   });
+  const { tree, pump, registered } = handle;
   const note = byClass(tree, 'dbc-note');
   check('the first answer has no key', text(note), '未配置 API Key');
-  check('the missing-key notice has no tooltip', note.props.title, undefined);
+  check('the missing-key notice has no tooltip', note.props['data-dbc-tip'], undefined);
 
   ready = true;
   const tick = registered.timers.find((entry) => entry.delay === 30000);
   check('the card ticks every 30 s', typeof tick, 'object');
   tick.callback();
   const next = await pump();
-  check('the next tick picks the balance up', text(byClass(next, 'dbc-balance')), '¥110.00');
-  check('and drops the missing-key line', tipOf(next, 'dbc-title').includes('未配置 API Key'), false);
+  check('the next tick picks the balance up', text(byClass(next, 'dbc-amount')), '¥110.00');
+  check('and drops the missing-key line', (await tipOf(handle, 'dbc-title')).includes('未配置 API Key'), false);
 }
 
 {
@@ -1137,19 +1294,20 @@ console.log('balance follows the provider');
   // can report, even for a provider that is not the open platform.
   const live = liveServices({ 'session-1': { provider: 'deepseek-account', model: 'deepseek-v4-pro' } });
   const data = livePayload({ deepseek: apiBalance() });
-  const { tree } = await mount({
+  const handle = await mount({
     now: IDLE_NOW,
     balance: { ok: true, value: null },
     catalog: CATALOG,
     services: live.services,
     data,
   });
-  check('a signed-out account falls back to the API balance', text(byClass(tree, 'dbc-balance')), '¥110.00');
-  check('and the title follows the API balance', text(byClass(tree, 'dbc-title')), 'DeepSeek API 余额');
+  const { tree } = handle;
+  check('a signed-out account falls back to the API balance', text(byClass(tree, 'dbc-amount')), '¥110.00');
+  check('and the title follows the API balance', text(byClass(tree, 'dbc-title')), 'API 余额');
   check(
-    'and the API tooltip describes the API only',
-    tipOf(tree, 'dbc-title'),
-    '💰 DeepSeek API 余额\n充值 CNY ¥100.00\n赠金 CNY ¥10.00\n合计 CNY ¥110.00\nDeepSeek 开放平台余额（API Key），每 30 秒刷新',
+    'and the API bubble describes the API only',
+    await tipOf(handle, 'dbc-title'),
+    '充值 | CNY ¥100.00 | 赠金 | CNY ¥10.00 | DeepSeek 开放平台余额，每 30 秒刷新',
   );
 }
 
@@ -1169,7 +1327,7 @@ for (const [label, deepseek, expected] of [
   });
   const note = byClass(tree, 'dbc-note');
   check('a signed-out account with API ' + label, text(note), expected);
-  check('and no tooltip when the API is ' + label, note.props.title, undefined);
+  check('and no tooltip when the API is ' + label, note.props['data-dbc-tip'], undefined);
 }
 
 {
@@ -1178,8 +1336,8 @@ for (const [label, deepseek, expected] of [
   const live = liveServices({ 'session-1': { provider: 'deepseek-official', model: 'deepseek-chat' } });
   const data = livePayload();
   const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
-  check('an absent API route falls back to the account balance', text(byClass(tree, 'dbc-balance')), '¥32.50');
-  check('with the account title', text(byClass(tree, 'dbc-title')), 'DeepSeek 余额');
+  check('an absent API route falls back to the account balance', text(byClass(tree, 'dbc-amount')), '¥32.50');
+  check('with the account title', text(byClass(tree, 'dbc-title')), '余额');
 
   const signedOut = await mount({
     now: IDLE_NOW,
@@ -1203,8 +1361,9 @@ for (const [label, deepseek, expected] of [
     services: live.services,
     data,
   });
-  check('english spells the API currency code', text(byClass(tree, 'dbc-balance')), 'CNY ¥110.00');
-  check('english title', text(byClass(tree, 'dbc-title')), 'DeepSeek API balance');
+  check('english spells the API currency code', text(byClass(tree, 'dbc-code')), 'CNY');
+  check('english API amount follows the code', text(byClass(tree, 'dbc-amount')), 'CNY¥110.00');
+  check('english title', text(byClass(tree, 'dbc-title')), 'API balance');
 }
 
 console.log('currency per language');
@@ -1213,29 +1372,29 @@ console.log('currency per language');
   check('zh takes the CNY table', JSON.stringify(priced(tree)), JSON.stringify(['0.50', '0.02', '4.00']));
 }
 {
-  const { tree } = await mountLocalized('en', {
+  const handle = await mountLocalized('en', {
     now: IDLE_NOW,
     balance: READY_BALANCE,
     catalog: CATALOG,
     data: livePayload({ prices: { CNY: cnyTable(0.5), USD: usdTable(0.11) } }),
   });
-  check('en takes the USD table', JSON.stringify(priced(tree)), JSON.stringify(['0.11', '0.003', '0.60']));
-  check('en tooltip marks the startup sync', tipOf(tree, 'dbc-model-name').includes('synced at startup'), true);
+  check('en takes the USD table', JSON.stringify(priced(handle.tree)), JSON.stringify(['0.11', '0.003', '0.60']));
+  check('en tooltip marks the startup sync', (await tipOf(handle, 'dbc-model')).includes(' | startup'), true);
 }
 {
-  const { tree } = await mountLocalized('en', {
+  const handle = await mountLocalized('en', {
     now: IDLE_NOW,
     balance: READY_BALANCE,
     catalog: CATALOG,
     data: livePayload({ prices: { CNY: cnyTable(0.5), USD: null } }),
   });
-  check('a missing USD table keeps the built-in USD prices', JSON.stringify(priced(tree)), JSON.stringify(['0.15', '0.003', '0.60']));
-  check('and the tooltip says built in', tipOf(tree, 'dbc-model-name').includes('built-in snapshot'), true);
+  check('a missing USD table keeps the built-in USD prices', JSON.stringify(priced(handle.tree)), JSON.stringify(['0.15', '0.003', '0.60']));
+  check('and the tooltip says built in', (await tipOf(handle, 'dbc-model')).includes(' | snapshot'), true);
 }
 {
-  const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data: livePayload({ prices: { CNY: null, USD: usdTable() } }) });
-  check('a missing CNY table keeps the built-in CNY prices', JSON.stringify(priced(tree)), JSON.stringify(['1.00', '0.02', '4.00']));
-  check('and the zh tooltip says built in', tipOf(tree, 'dbc-model-name').includes('内置快照'), true);
+  const handle = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data: livePayload({ prices: { CNY: null, USD: usdTable() } }) });
+  check('a missing CNY table keeps the built-in CNY prices', JSON.stringify(priced(handle.tree)), JSON.stringify(['1.00', '0.02', '4.00']));
+  check('and the zh tooltip says built in', (await tipOf(handle, 'dbc-model')).includes('内置快照'), true);
 }
 {
   // USD prices need a third decimal; CNY keeps two.
@@ -1245,7 +1404,7 @@ console.log('currency per language');
     catalog: CATALOG,
   });
   check('peak USD prices', JSON.stringify(priced(tree)), JSON.stringify(['0.30', '0.006', '1.20']));
-  check('peak USD label', text(byClass(tree, 'dbc-tier')), '$/M · Peak price');
+  check('peak USD card names the peak', text(byClass(tree, 'dbc-chip')).trim(), 'Peak');
 }
 
 if (hostPayload !== null) {
@@ -1253,17 +1412,19 @@ if (hostPayload !== null) {
   {
     // 2024-01-01 is a Monday holiday in the calendar but outside the built-in
     // table (2025-2026), so the period proves which holiday set is in use.
-    const { tree } = await mount({
+    const handle = await mount({
       now: Date.parse('2024-01-01T02:30:00Z'),
       balance: READY_BALANCE,
       catalog: CATALOG,
       data: hostPayload,
     });
+    const { tree } = handle;
     check('real payload prices the model', JSON.stringify(priced(tree)), JSON.stringify(['1.00', '0.02', '4.00']));
-    check('real payload date in the tooltip', tipOf(tree, 'dbc-model-name').includes(hostPayload.prices.CNY.asOf), true);
-    check('real payload counts as a startup sync', tipOf(tree, 'dbc-model-name').includes('启动时校准'), true);
+    check('real payload date in the tooltip', (await tipOf(handle, 'dbc-model')).includes(hostPayload.prices.CNY.asOf), true);
+    check('real payload counts as a startup sync', (await tipOf(handle, 'dbc-model')).includes('启动时校准'), true);
     check('real calendar makes a 2024 holiday idle', byClass(tree, 'dbc-chip').props.className, 'dbc-chip dbc-chip-idle');
-    check('real calendar names the 2024 holiday', text(byClass(tree, 'dbc-holiday')), '元旦假期中');
+    check('real calendar names the 2024 holiday', text(byClass(tree, 'dbc-holiday-text')), '元旦');
+    check('real calendar dates the 2024 holiday', text(byClass(tree, 'dbc-holiday-meta')), '1/1 · 空闲全天');
   }
   {
     const { tree } = await mountLocalized('en', {
@@ -1408,10 +1569,11 @@ const MALFORMED = [
   ],
 ];
 for (const [label, data, expectedPrices = SNAPSHOT_ZH_PEAK] of MALFORMED) {
-  const { tree } = await mount({ now: PEAK_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
+  const handle = await mount({ now: PEAK_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
+  const { tree } = handle;
   check(label + ': the card still renders', byClass(tree, 'dbc-card') !== null, true);
   check(label + ': it keeps the snapshot prices', JSON.stringify(priced(tree)), expectedPrices);
-  check(label + ': the tooltip marks the snapshot', tipOf(tree, 'dbc-model-name').includes('内置快照'), true);
+  check(label + ': the tooltip marks the snapshot', (await tipOf(handle, 'dbc-model')).includes('内置快照'), true);
   check(label + ': the chip still renders', byClass(tree, 'dbc-chip').props.className.startsWith('dbc-chip dbc-chip-'), true);
 }
 
@@ -1458,34 +1620,36 @@ for (const [label, data, expectedPrices = SNAPSHOT_ZH_PEAK] of MALFORMED) {
     },
   });
   check('an overlapping （休） day is still idle', byClass(tree, 'dbc-chip').props.className, 'dbc-chip dbc-chip-idle');
-  check('an overlapping day keeps its banner', text(byClass(tree, 'dbc-holiday')), '国庆节假期中');
+  check('an overlapping day keeps its banner', text(byClass(tree, 'dbc-holiday-text')), '国庆节');
   check('an overlapping day shows no 调休 chip', chipOf(tree, 'makeup'), null);
 }
 
 console.log('route failures');
 {
-  const { tree, delays } = await mount({
+  const handle = await mount({
     now: PEAK_NOW,
     balance: READY_BALANCE,
     catalog: CATALOG,
     data: livePayload(),
     route: 'http-404',
   });
+  const { tree, delays } = handle;
   check('a 404 route keeps the snapshot prices', JSON.stringify(priced(tree)), SNAPSHOT_ZH_PEAK);
-  check('a 404 route marks the snapshot in the tooltip', tipOf(tree, 'dbc-model-name').includes('内置快照'), true);
+  check('a 404 route marks the snapshot in the tooltip', (await tipOf(handle, 'dbc-model')).includes('内置快照'), true);
   check('a 404 route retries twice more', delays.filter((delay) => delay === 3000).length, 2);
   check('a 404 route still renders the card', byClass(tree, 'dbc-card') !== null, true);
 }
 {
-  const { tree, delays } = await mount({
+  const handle = await mount({
     now: PEAK_NOW,
     balance: READY_BALANCE,
     catalog: CATALOG,
     data: livePayload(),
     route: 'absent',
   });
+  const { tree, delays } = handle;
   check('an absent fetch keeps the snapshot prices', JSON.stringify(priced(tree)), SNAPSHOT_ZH_PEAK);
-  check('an absent fetch marks the snapshot in the tooltip', tipOf(tree, 'dbc-model-name').includes('内置快照'), true);
+  check('an absent fetch marks the snapshot in the tooltip', (await tipOf(handle, 'dbc-model')).includes('内置快照'), true);
   check('an absent fetch never polls the route', delays.filter((delay) => delay === 3000).length, 0);
   check('an absent fetch still renders the card', byClass(tree, 'dbc-card') !== null, true);
 }
@@ -1495,10 +1659,10 @@ console.log('live CNY without a USD table');
   const data = livePayload({ prices: { CNY: cnyTable(0.5), USD: null } });
   const zh = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
   check('zh keeps the live CNY table', JSON.stringify(priced(zh.tree)), JSON.stringify(['0.50', '0.02', '4.00']));
-  check('zh marks it as a startup sync', tipOf(zh.tree, 'dbc-model-name').includes('启动时校准'), true);
+  check('zh marks it as a startup sync', (await tipOf(zh, 'dbc-model')).includes('启动时校准'), true);
   const en = await mountLocalized('en', { now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
   check('en falls back to the built-in USD table', JSON.stringify(priced(en.tree)), JSON.stringify(['0.15', '0.003', '0.60']));
-  check('en marks the built-in snapshot', tipOf(en.tree, 'dbc-model-name').includes('built-in snapshot'), true);
+  check('en marks the built-in snapshot', (await tipOf(en, 'dbc-model')).includes(' | snapshot'), true);
 }
 
 console.log('locale currency matrix');
@@ -1507,14 +1671,15 @@ console.log('locale currency matrix');
   for (const language of ['zh', 'zh-CN', 'zh-TW']) {
     const { tree } = await mountLocalized(language, { now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
     check(language + ' reads the CNY table', JSON.stringify(priced(tree)), JSON.stringify(['0.50', '0.02', '4.00']));
-    check(language + ' keeps the bare ¥ balance', text(byClass(tree, 'dbc-balance')), '¥32.50');
+    check(language + ' keeps the bare ¥ balance', text(byClass(tree, 'dbc-amount')), '¥32.50');
   }
   for (const language of ['en', 'ja', 'xx']) {
-    const { tree } = await mountLocalized(language, { now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
+    const handle = await mountLocalized(language, { now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, data });
+    const { tree } = handle;
     check(language + ' reads the USD table', JSON.stringify(priced(tree)), JSON.stringify(['0.11', '0.003', '0.60']));
     check(language + ' keeps the third decimal', priced(tree)[1], '0.003');
-    check(language + ' prefixes the ISO code', text(byClass(tree, 'dbc-balance')), 'CNY ¥32.50');
-    check(language + ' names USD in the tooltip', tipOf(tree, 'dbc-model-name').includes('USD per 1M tokens'), true);
+    check(language + ' prefixes the ISO code', text(byClass(tree, 'dbc-code')) + '|' + text(byClass(tree, 'dbc-amount')), 'CNY|CNY¥32.50');
+    check(language + ' names USD in the tooltip', (await tipOf(handle, 'dbc-model')).includes('USD per 1M tokens'), true);
   }
 }
 
@@ -1544,13 +1709,258 @@ console.log('timezone independence');
       for (const [label, now, chipClass, countdown] of rows) {
         const { tree } = await mount({ now, balance: READY_BALANCE, catalog: CATALOG, data: null });
         check(zone + ' ' + label + ' keeps the chip', byClass(tree, 'dbc-chip').props.className, chipClass);
-        check(zone + ' ' + label + ' keeps the countdown', text(byClass(tree, 'dbc-countdown')), countdown);
+        check(zone + ' ' + label + ' keeps the countdown', text(byClass(tree, 'dbc-clock')), countdown);
       }
     }
   } finally {
     if (original === undefined) delete process.env.TZ;
     else process.env.TZ = original;
   }
+}
+
+// --------------------------------------------------------------- bubble bodies
+// The card draws its own bubble now, so each assertion reads the node a trigger
+// produced: labelled rows, tone dots, a hairline and a footnote. The head, the
+// title and the total row are gone — the card already shows the number.
+console.log('bubble bodies');
+
+{
+  const handle = await mount({
+    now: IDLE_NOW,
+    balance: wallets([{ currency: 'CNY', balance: '32.50' }], [{ currency: 'CNY', balance: '10.00' }]),
+    catalog: CATALOG,
+  });
+  const { bubble } = await openTip(handle, 'dbc-title');
+  check('account bubble is a .dbc-tip', bubble === null ? null : bubble.props.className, 'dbc-tip');
+  // The bubble is the only hover text: the trigger carries no native title.
+  check('account trigger is marked', byClass(handle.tree, 'dbc-title').props['data-dbc-tip'], 'trigger');
+  check('account trigger carries no title', byClass(handle.tree, 'dbc-title').props.title, undefined);
+
+  const rows = tipRows(bubble);
+  check('account row count', rows.length, 2);
+  check('account first row label', text(byClass(rows[0], 'dbc-tip-label')), '充值');
+  check('account first row amount', text(byClass(rows[0], 'dbc-tip-amount')), 'CNY ¥32.50');
+  check('account first row dot', tipDotClass(rows[0]), 'dbc-tip-dot dbc-tip-dot-ok');
+  check('account second row label', text(byClass(rows[1], 'dbc-tip-label')), '赠送');
+  check('account second row amount', text(byClass(rows[1], 'dbc-tip-amount')), 'CNY ¥10.00');
+  check('account second row dot', tipDotClass(rows[1]), 'dbc-tip-dot dbc-tip-dot-warn');
+
+  check('account bubble has no head', byClass(bubble, 'dbc-tip-head'), null);
+  check('account rule count', findAll(bubble, (node) => node.props.className === 'dbc-tip-rule').length, 1);
+  check('account note', text(byClass(bubble, 'dbc-tip-note')), 'DSH 账号余额（含赠金），每 30 秒刷新');
+  check('account rows never repeat the total', rows.map(text).join(' ').includes('合计'), false);
+  check(
+    'account child order',
+    bubble === null ? null : JSON.stringify(bubble.children.map((child) => child.props.className)),
+    JSON.stringify(['dbc-tip-arrow', 'dbc-tip-row', 'dbc-tip-row', 'dbc-tip-rule', 'dbc-tip-note']),
+  );
+}
+
+{
+  // The same bubble for the open-platform balance: the rows are only the two
+  // contributors the headline adds up.
+  const live = liveServices();
+  const handle = await mount({
+    now: IDLE_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    services: live.services,
+    data: livePayload({ deepseek: apiBalance() }),
+  });
+  live.select('session-1', { provider: 'deepseek-official', model: 'deepseek-chat' });
+  const tree = await handle.pump();
+  check('the API bubble explains the headline', text(byClass(tree, 'dbc-amount')), '¥110.00');
+  const { bubble } = await openTip(handle, 'dbc-title');
+
+  const rows = tipRows(bubble);
+  check('API row count', rows.length, 2);
+  check(
+    'API row labels',
+    JSON.stringify(rows.map((row) => text(byClass(row, 'dbc-tip-label')))),
+    JSON.stringify(['充值', '赠金']),
+  );
+  check(
+    'API row amounts',
+    JSON.stringify(rows.map((row) => text(byClass(row, 'dbc-tip-amount')))),
+    JSON.stringify(['CNY ¥100.00', 'CNY ¥10.00']),
+  );
+  check('API first row dot', tipDotClass(rows[0]), 'dbc-tip-dot dbc-tip-dot-ok');
+  check('API second row dot', tipDotClass(rows[1]), 'dbc-tip-dot dbc-tip-dot-warn');
+  check('API note names the open platform', text(byClass(bubble, 'dbc-tip-note')).includes('开放平台'), true);
+  check('API rows never repeat the total', rows.map(text).join(' ').includes('合计'), false);
+}
+
+{
+  // The model bubble is a four-row definition list: no footnote, no tone dot, and
+  // therefore no hairline either — the hairline only separates rows from a note.
+  const lowercase = {
+    ok: true,
+    value: {
+      default: { provider: 'deepseek-account', model: 'deepseek-flash' },
+      groups: [{ id: 'deepseek-account', name: 'DeepSeek', models: [{ id: 'deepseek-flash', name: 'DeepSeek-Flash' }] }],
+    },
+  };
+  const handle = await mount({
+    now: IDLE_NOW,
+    balance: READY_BALANCE,
+    catalog: lowercase,
+    data: livePayload(),
+  });
+  const { bubble } = await openTip(handle, 'dbc-model');
+  const rows = tipRows(bubble);
+  check('model row count', rows.length, 4);
+  check('model bubble has no head', byClass(bubble, 'dbc-tip-head'), null);
+  check('model bubble has no note', byClass(bubble, 'dbc-tip-note'), null);
+  check(
+    'model row labels',
+    JSON.stringify(rows.map((row) => text(byClass(row, 'dbc-tip-label')))),
+    JSON.stringify(['模型 ID', '计价单位', '快照日期', '校准方式']),
+  );
+  check(
+    'model row values',
+    JSON.stringify(rows.map((row) => text(byClass(row, 'dbc-tip-amount')))),
+    JSON.stringify(['deepseek-flash', '人民币元 / 百万 tokens', '2026-10-26', '启动时校准']),
+  );
+  check('model bubble has no dots', tipDots(bubble).length, 0);
+  check('model bubble has no rule', findAll(bubble, (node) => node.props.className === 'dbc-tip-rule').length, 0);
+}
+
+{
+  // Peak, English, live table: every label switches language and the sync row
+  // reads the startup sync, not the built-in snapshot.
+  const live = liveServices({ 'session-1': { provider: 'deepseek-account', model: 'deepseek-v4-pro' } });
+  const handle = await mountLocalized('en', {
+    now: PEAK_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG_TWO,
+    services: live.services,
+    data: livePayload(),
+  });
+  live.select('session-1', { provider: 'deepseek-account', model: 'deepseek-flash' });
+  await handle.pump();
+  const { bubble } = await openTip(handle, 'dbc-model');
+  const rows = tipRows(bubble);
+  check(
+    'en model row labels',
+    JSON.stringify(rows.map((row) => text(byClass(row, 'dbc-tip-label')))),
+    JSON.stringify(['Model ID', 'Unit', 'Snapshot', 'Sync mode']),
+  );
+  check(
+    'en model row values',
+    JSON.stringify(rows.map((row) => text(byClass(row, 'dbc-tip-amount')))),
+    JSON.stringify(['deepseek-flash', 'USD per 1M tokens', '2026-10-26', 'startup']),
+  );
+}
+
+{
+  // A missing USD table falls back to the built-in snapshot: same shape, and the
+  // sync row ends with the built-in wording.
+  const handle = await mountLocalized('en', {
+    now: PEAK_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    data: livePayload({ prices: { CNY: cnyTable(0.5), USD: null } }),
+  });
+  const rows = tipRows((await openTip(handle, 'dbc-model')).bubble);
+  check('en built-in source keeps the snapshot date', text(byClass(rows[2], 'dbc-tip-amount')), '2026-10-26');
+  check('en built-in source names the built-in snapshot', text(byClass(rows[3], 'dbc-tip-amount')), 'snapshot');
+}
+
+// ---------------------------------------------------------- bubble mechanics
+console.log('hover bubble');
+{
+  const handle = await mount({
+    now: IDLE_NOW,
+    balance: READY_BALANCE,
+    catalog: CATALOG,
+    data: livePayload({ holidays: { days: [dayOf(2026, 10, 1)], years: [2026] } }),
+  });
+  const trigger = () => byClass(handle.tree, 'dbc-title');
+  const event = () => ({ currentTarget: { getBoundingClientRect: () => ({ ...TRIGGER_BOX }) } });
+  /** Arms a dwell with a captured timer, so the test never waits for it. */
+  const arm = (invoke) => {
+    const realSetTimeout = globalThis.setTimeout;
+    let timer = null;
+    let delay = -1;
+    globalThis.setTimeout = (fn, ms) => {
+      timer = fn;
+      delay = ms;
+      return 1;
+    };
+    try {
+      invoke();
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    return { delay, fire: timer };
+  };
+
+  check('a settled card draws no bubble', byClass(handle.tree, 'dbc-tip'), null);
+  check('the balance trigger is keyboard reachable', trigger().props.tabIndex, 0);
+  check('the balance trigger takes hover handlers', typeof trigger().props.onMouseEnter, 'function');
+
+  // Hover arms the dwell instead of opening at once.
+  const hover = arm(() => trigger().props.onMouseEnter(event()));
+  await handle.pump();
+  check('a hover only arms the bubble', byClass(handle.tree, 'dbc-tip'), null);
+  check('the hover dwell is 240 ms', hover.delay, 240);
+  check('the hover armed one timer', typeof hover.fire, 'function');
+  hover.fire();
+  const opened = await handle.pump();
+  check('the armed hover draws the bubble', byClass(opened, 'dbc-tip') !== null, true);
+
+  // Leaving the trigger is the only way out: the bubble takes no pointer events.
+  trigger().props.onMouseLeave();
+  const left = await handle.pump();
+  check('a mouse leave closes the bubble', byClass(left, 'dbc-tip'), null);
+
+  // Focus dwells shorter than the pointer does.
+  const focus = arm(() => trigger().props.onFocus(event()));
+  await handle.pump();
+  check('a focus only arms the bubble', byClass(handle.tree, 'dbc-tip'), null);
+  check('the focus dwell is 90 ms', focus.delay, 90);
+  focus.fire();
+  const focused = await handle.pump();
+  check('the armed focus draws the bubble', byClass(focused, 'dbc-tip') !== null, true);
+
+  trigger().props.onKeyDown({ key: 'Escape' });
+  const escaped = await handle.pump();
+  check('escape closes the bubble', byClass(escaped, 'dbc-tip'), null);
+
+  // Blur closes it too, so tabbing away never leaves it behind.
+  const again = arm(() => trigger().props.onFocus(event()));
+  again.fire();
+  await handle.pump();
+  trigger().props.onBlur();
+  const blurred = await handle.pump();
+  check('blur closes the bubble', byClass(blurred, 'dbc-tip'), null);
+
+  // A chip owns its bubble even though it is not a text trigger.
+  const chip = byClass(handle.tree, 'dbc-chip');
+  check('a chip is not a text trigger', chip.props.className.split(' ').includes('dbc-tip-trigger'), false);
+  check('a chip still carries the handlers', typeof chip.props.onMouseEnter, 'function');
+  check(
+    'the period bubble spells out the window',
+    await tipOf(handle, 'dbc-chip'),
+    '高峰 | 周一至周五 09:00-12:00\n14:00-18:00 | 空闲 | 其余所有时段 | 数据来源 | iCloud 中国大陆日历 | 北京时间，不含法定节假日',
+  );
+
+  // One bubble for the whole model line, not one per row.
+  const modelTip = await openTip(handle, 'dbc-model');
+  check(
+    'the model line draws a single bubble',
+    findAll(modelTip.tree, (node) => typeof node.props.className === 'string' && node.props.className.split(' ').includes('dbc-tip')).length,
+    1,
+  );
+}
+
+{
+  // The make-up chip's bubble is a single sentence: no rows, so no hairline.
+  const handle = await mount({ now: Date.parse('2026-10-10T02:30:00Z'), balance: READY_BALANCE, catalog: CATALOG, data: null });
+  const { bubble } = await openTip(handle, 'dbc-chip-makeup');
+  check('the make-up bubble has no rows', tipRows(bubble).length, 0);
+  check('the make-up bubble has no rule', findAll(bubble, (node) => node.props.className === 'dbc-tip-rule').length, 0);
+  check('the make-up bubble is its note', text(byClass(bubble, 'dbc-tip-note')), '调休日按周末处理，全天不计高峰。');
 }
 
 console.log(failures === 0 ? '\nclient: ALL CHECKS PASSED' : '\nclient: ' + failures + ' CHECK(S) FAILED');
