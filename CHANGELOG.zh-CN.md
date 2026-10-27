@@ -2,6 +2,12 @@
 
 `@jimmyzm/dsh-billing-card` 的重要变更。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。英文版见 [CHANGELOG.md](CHANGELOG.md)。
 
+## 未发布
+
+### 调整
+
+- 发布任务改为幂等：先读 registry 的版本文档，已发布的版本直接跳过；包内容检查换成 `npm pack --dry-run`，重跑不会再因 `E403 cannot publish over the previously published versions` 失败。
+
 ## 1.2.1 — 2026-10-27
 
 ### 新增

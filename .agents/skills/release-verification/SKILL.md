@@ -58,6 +58,10 @@ time you need to prove that what is on npm matches what is in the repo and insta
 5. Release: push the commit, then create the tag and release. Publishing runs from
    `.github/workflows/publish.yml` on the release, using npm trusted publishing (OIDC).
    **Never run `npm publish` locally** — provenance only exists when the workflow signs it.
+   The job is idempotent: it asks the registry's version document first and prints
+   `already on the registry; skipping publish` when the version exists, so a re-run
+   is green instead of `E403 cannot publish over the previously published versions`.
+   Do not read that skip as a failure, and do not bump the version just to re-run.
    ```bash
    gh release view v<version>
    gh run watch   # on the publish run

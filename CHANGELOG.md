@@ -2,6 +2,12 @@
 
 Notable changes to `@jimmyzm/dsh-billing-card`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The Chinese edition is [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md).
 
+## Unreleased
+
+### Changed
+
+- The publish job is idempotent: it reads the registry's version document first and skips a version that is already published, and the tarball check uses `npm pack --dry-run` so a re-run no longer fails on `E403 cannot publish over the previously published versions`.
+
 ## 1.2.1 — 2026-10-27
 
 ### Added
