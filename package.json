@@ -1,6 +1,6 @@
 {
   "name": "@jimmyzm/dsh-billing-card",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "DSH sidebar footer card: DeepSeek account balance, the current model's unit prices (CNY for a Chinese UI, USD for every other language), the live peak/idle billing window with a countdown, and Chinese statutory-holiday / make-up-workday labels.",
   "license": "MIT",
   "author": "jimmyzm",

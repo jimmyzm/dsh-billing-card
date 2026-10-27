@@ -2,6 +2,29 @@
 
 Notable changes to `@jimmyzm/dsh-billing-card`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The Chinese edition is [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md).
 
+## 1.3.0 — 2026-10-28
+
+### Added
+
+- Redesigned card: one row per fact (countdown and state chips, amount, provider, model, three price columns), with every colour resolved from the card's own `--dbc-*` layer through `light-dark()` instead of host theme variables.
+- The hover bubble is now drawn in-house: no host tooltip primitive, flip and edge clamping, an arrow pointing at the trigger, a 240 ms delay and `Esc` to close; its body is a two-column label/value list.
+- The countdown moved to the top-left and takes the colour of the current window (green idle, amber peak), matching the chip on the right.
+- The price source split into a snapshot date and a sync mode; the period bubble lists peak, idle and source; the make-up day explains itself in one sentence.
+- Both READMEs open with a 1200×320 banner (Chinese and English), and the screenshots were trimmed to one each.
+
+### Fixed
+
+- The card disappeared after collapsing and reopening the sidebar: `if (!wide) return null` sat above the hover hooks, so collapsing dropped the hook count from 23 to 14 and React tore the subtree down.
+- Hovering the amount no longer lights up the whole row — only the number itself triggers.
+- The separator between the rows and the note was missing because the rule referenced an undeclared `--dbc-line-2` token, so nothing was painted.
+- The UI no longer shows an impossible 「peak + make-up」 combination.
+
+### Changed
+
+- `.dbc-note` now sits on the type scale (`18px` → `16px`), and the unused CSS rule, two dictionary keys and two stale comments are gone.
+- New project skill `dsh-card-design` plus `docs/design-skill-audit.md` (provenance and method audit of the third-party skills); `banner-design` is no longer vendored and is installed on demand.
+
+
 ## Unreleased
 
 ### Changed
