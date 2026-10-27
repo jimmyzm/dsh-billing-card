@@ -51,6 +51,8 @@ DSH（DeepSeek Harness）侧边栏底部的一张卡片：余额、当前模型�
 
 已发布到 npm（[`@jimmyzm/dsh-billing-card`](https://npmx.dev/package/@jimmyzm/dsh-billing-card)），是一个 DSH bundle。用你实际运行的 profile（桌面应用用 `desktop`，`dsh web` 用 `web`）：
 
+需要 DSH 0.2.0-rc.1 或更新版本——`engines.dsh` 声明了这个范围；卡片用到的 manifest 字段、页脚插槽、`locale` 与 `webServer` 服务、tooltip 图元在该版本中都已存在。
+
 ```bash
 dsh plugin --profile web add @jimmyzm/dsh-billing-card
 ```
@@ -104,6 +106,7 @@ Host 半边在每次启动时拉取两份价目表和中国大陆节假日日历
 - 价目与节假日在每次启动时读取一次；开放平台余额每 30 秒重新读取。切换提供商时立即重读。
 - 没有配置 `DEEPSEEK_API_KEY` 时显示账号余额。
 - 非 DeepSeek 官方渠道提供的模型不显示价格。
+- 已在 DSH 0.2.1-rc.3 上端到端验证；对 0.2.0-rc.1 而言源码层面的接口一致，只是该版本的 tooltip 会忽略 `align: 'start'`（气泡居中），也还不读 `engines.dsh`。
 - 卡片需要 HTTP GUI（`dsh web`）；没有 web 服务器时用内置数据，缺少 `uiSession` / `modelDirectories` 服务时按目录默认模型计价。
 
 ## 开发
@@ -117,6 +120,8 @@ index.js parse.js   # Host 半边：启动抓取 + 数据路由
 client.js           # Client 半边：卡片与内置回退数据
 locale/             # 插件管理页用的中英文字典
 icon.svg            # 插件图标
+CHANGELOG.md        # 更新日志，中英双份，新的在前
+CHANGELOG.zh-CN.md
 docs/               # README 图标与截图（只在仓库里，不进包）
 test/               # 离线测试：解析器、Host 路由、Client 渲染
 AGENTS.md           # 面向 Agent 的开发规范（只在仓库里，不进包）

@@ -51,6 +51,10 @@ Real renders, 256 px sidebar at 2× density.
 
 The package is published on npm ([`@jimmyzm/dsh-billing-card`](https://npmx.dev/package/@jimmyzm/dsh-billing-card)) as a DSH bundle. Use the profile you actually run (`desktop` for the desktop app, `web` for `dsh web`):
 
+Requires DSH 0.2.0-rc.1 or newer — `package.json` declares the range in `engines.dsh`, and the
+manifest fields, the footer slot, the `locale` and `webServer` services, and the tooltip primitive
+it uses all exist in that release.
+
 ```bash
 dsh plugin --profile web add @jimmyzm/dsh-billing-card
 ```
@@ -104,6 +108,8 @@ The price block has no hover text — its labels are on screen.
 - Prices and holidays are read once per application start; the open-platform balance is re-read every 30 s. A provider switch re-reads it right away.
 - Without a `DEEPSEEK_API_KEY` the card shows the account balance.
 - A model served by a provider other than DeepSeek's own shows no price.
+- Verified end to end on DSH 0.2.1-rc.3. Against 0.2.0-rc.1 the source surface is the same, but that
+  build's tooltip ignores `align: 'start'` (the bubble centres) and does not read `engines.dsh` yet.
 - The card needs the HTTP GUI (`dsh web`); without a web server it runs on the built-in copies, and without the `uiSession` / `modelDirectories` services it prices the catalog default.
 
 ## Development
@@ -117,6 +123,8 @@ index.js parse.js   # Host half: startup fetch + the data route
 client.js           # Client half: the card and its built-in fallbacks
 locale/             # zh/en dictionaries for the plugin manager
 icon.svg            # plugin icon
+CHANGELOG.md        # release notes, English and Chinese, newest first
+CHANGELOG.zh-CN.md
 docs/               # README logo and screenshots (repository only, not shipped)
 test/               # offline suite: parsers, host route, client render
 AGENTS.md           # working spec for agents on this repo (repository only, not shipped)

@@ -86,6 +86,11 @@ Hover text is the card's only place for the long explanation, so it follows the 
 
 ## Layout and compatibility guards
 
+- `engines.dsh` in `package.json` must list each prerelease line explicitly
+  (`>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.3.0-0`): a plain `>=0.2.0-rc.1` rejects every later
+  prerelease under the semver rule that a prerelease only satisfies a range naming that exact
+  `major.minor.patch` with a prerelease. Keep the range honest — it is what blocks a DSH build
+  the card was never tested on.
 - `DATA_PATH = '/deepseek-billing-card/data'` is frozen across the package rename. Do not
   rename it: an in-place upgrade depends on a still-running Host answering the old path.
 - Never add `webServer` to `dsh.client.inject` in `package.json`, and never register the route
@@ -113,6 +118,7 @@ Hover text is the card's only place for the long explanation, so it follows the 
 | `test/` | Offline suite (`npm test`): parsers on captured fixtures, Host with a stubbed `fetch`, Client in a miniature React | none |
 | `.agents/skills/` | Project skills for agents working on this repo | none |
 | `docs/` | README logo and screenshots — repository only, never shipped | none |
+| `CHANGELOG.md` / `CHANGELOG.zh-CN.md` | Release notes in both languages, newest first; shipped | none |
 
 ## Working rules
 
@@ -131,8 +137,11 @@ Hover text is the card's only place for the long explanation, so it follows the 
 - Undo a pushed commit with `git revert`, never with a force-push.
 - Keep `README.md` (English, default) and `README.zh-CN.md` in step: same sections, same table
   rows, cross-linked.
-- Release notes are English, with one emoji per section: `## ✨ New`, `## 🐛 Fixed`,
-  `## 📦 Package`. They mirror the commits of that tag and never mix in Chinese prose.
+- Release notes lead with Chinese and then repeat the same sections in English; each language uses one
+  emoji per section (`## ✨ 新增`, `## 🐛 修复`, `## 📦 打包` / `## ✨ New`, `## 🐛 Fixed`,
+  `## 📦 Package`). They mirror the commits of that tag.
+- Every release updates `CHANGELOG.md` and `CHANGELOG.zh-CN.md` together, adding the new version at
+  the top with the same content as the release notes. The two files never drift.
 
 ## Route re-read cadence
 
