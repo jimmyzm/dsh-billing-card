@@ -34,17 +34,17 @@ time you need to prove that what is on npm matches what is in the repo and insta
 
 1. Gate the code:
    ```bash
-   node --check index.js parse.js client.js && npm test
+   node --check index.js && node --check parse.js && node --check client.js && npm test
    ```
    Zero `FAIL`; note the assertion count and compare it with the previous release.
 2. Freeze the artifact shape:
    ```bash
    npm pack --dry-run
    ```
-   Expected: 11 files — `index.js`, `parse.js`, `client.js`, `cordis.patch.yml`, `icon.svg`,
-   `locale/en.json`, `locale/zh.json`, `README.md`, `README.zh-CN.md`, `LICENSE`,
-   `package.json`. No `docs/`, no `test/`, no `.agents/`, no `AGENTS.md`, no `.github/`, no
-   `.DS_Store`. Record the packed and unpacked sizes.
+   Expected: 13 files — `index.js`, `parse.js`, `client.js`, `cordis.patch.yml`, `icon.svg`,
+   `locale/en.json`, `locale/zh.json`, `README.md`, `README.zh-CN.md`, `CHANGELOG.md`,
+   `CHANGELOG.zh-CN.md`, `LICENSE`, `package.json`. No `docs/`, no `test/`, no `.agents/`, no
+   `AGENTS.md`, no `.github/`, no `.DS_Store`. Record the packed and unpacked sizes.
 3. Prove the shipped Host half actually loads **as an installed package**, not as a folder copy:
    unpack the tarball into a temp directory, symlink it into a throwaway profile's
    `node_modules/@jimmyzm/dsh-billing-card`, then

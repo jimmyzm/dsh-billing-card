@@ -72,7 +72,7 @@ card, so `periodAt`/`nextSwitchAt` and the rendered chip are checked together.
 
 ## Verification
 
-- `node --check index.js parse.js client.js && npm test` from a clean tree.
+- `node --check index.js && node --check parse.js && node --check client.js && npm test` from a clean tree.
 - Each new rule has at least one positive **and** one negative assertion (a holiday must prove
   peak is suppressed *and* that the neighbouring workday is still peak).
 - Every boundary case names the instant and the expected countdown in the row, so a failure line

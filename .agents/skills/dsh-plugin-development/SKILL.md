@@ -65,7 +65,7 @@ running DSH profile.
    to the returned object; never make the Client re-parse raw upstream text.
 5. Gate every change before claiming anything:
    ```bash
-   node --check index.js parse.js client.js && npm test
+   node --check index.js && node --check parse.js && node --check client.js && npm test
    ```
 6. Live check (Client half): the GUI URL and module rev come from the running app.
    ```bash
