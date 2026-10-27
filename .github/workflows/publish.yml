@@ -50,8 +50,11 @@ jobs:
 
       # Nothing outside the declared runtime surface may ship: docs/, test/,
       # .agents/ and AGENTS.md are repository-only.
+      # `npm pack --dry-run` lists the same manifest without contacting the
+      # registry; `npm publish --dry-run` fails once the version already exists,
+      # which would turn every re-run red for the wrong reason.
       - name: Check the tarball contents
-        run: npm publish --dry-run
+        run: npm pack --dry-run
 
       # A re-run, or a release published twice, must not turn red: the version is
       # already on the registry, and publishing it again only produces
