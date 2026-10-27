@@ -185,6 +185,10 @@ async function mount({ now, balance, catalog, services = liveServices().services
 
     // One React-like render pass, including the effects queued by it.
     let latest = null;
+    // Hooks the component asked for in its last pass. React requires this count to
+    // be identical between renders, so a conditional `return` above a hook shows up
+    // here as a shrinking count.
+    let hooks = 0;
     const pump = async () => {
       const realNow = Date.now;
       Date.now = () => now;
@@ -196,6 +200,7 @@ async function mount({ now, balance, catalog, services = liveServices().services
         mountCtx.dirty = false;
         try {
           tree = registered.component(allProps);
+          hooks = mountCtx.cursor;
         } finally {
           renderCtx = previous;
         }
@@ -223,6 +228,9 @@ async function mount({ now, balance, catalog, services = liveServices().services
     return {
       get tree() {
         return latest;
+      },
+      get hooks() {
+        return hooks;
       },
       registered,
       props: allProps,
@@ -554,6 +562,51 @@ console.log('rail mode');
 {
   const { tree } = await mount({ now: Date.parse('2026-10-25T16:52:00Z'), balance: READY_BALANCE, catalog: CATALOG, props: { wide: false } });
   check('rail renders nothing', tree, null);
+}
+
+// Collapsing the sidebar must not cost the card: `wide` flips false and back, and
+// the component has to survive the round trip. A conditional `return` above the
+// tooltip hooks shrank the hook count on the collapsed render, and the next expand
+// threw, leaving an empty footer until the page reloaded.
+console.log('sidebar collapse and expand');
+{
+  const handle = await mount({ now: Date.parse('2026-10-25T16:52:00Z'), balance: READY_BALANCE, catalog: CATALOG });
+  const open = handle.tree;
+  check('a wide sidebar draws the card', open === null, false);
+  const openHooks = handle.hooks;
+  handle.props.wide = false;
+  const collapsed = await handle.pump();
+  check('a collapsed sidebar draws nothing', collapsed, null);
+  check('and asks for the same hooks', handle.hooks, openHooks);
+  handle.props.wide = true;
+  const expanded = await handle.pump();
+  check('expanding brings the card back', expanded === null, false);
+  check('with its amount intact', text(byClass(expanded, 'dbc-amount')), '¥32.50');
+  // The table the card already holds is the table it must draw on the way back: a
+  // re-run of the route effect would blank the prices for a frame.
+  const priceValues = (tree) =>
+    findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-value').map(text);
+  check('and its prices intact', JSON.stringify(priceValues(expanded)), JSON.stringify(priceValues(open)));
+  check('still asking for the same hooks', handle.hooks, openHooks);
+  // A collapse unmounts the trigger without a pointerleave, so a bubble opened
+  // before the collapse must not come back with the card.
+  await handle.pump();
+  handle.dispose();
+}
+
+console.log('collapse closes an open bubble');
+{
+  const handle = await mount({ now: Date.parse('2026-10-25T16:52:00Z'), balance: READY_BALANCE, catalog: CATALOG });
+  await tipOf(handle, 'dbc-model');
+  const opened = findAll(handle.tree, (n) => typeof n.props.className === 'string' && n.props.className.startsWith('dbc-tip')).length > 0;
+  check('a bubble was drawn', opened, true);
+  handle.props.wide = false;
+  await handle.pump();
+  handle.props.wide = true;
+  await handle.pump();
+  const after = findAll(handle.tree, (n) => typeof n.props.className === 'string' && n.props.className.startsWith('dbc-tip')).length;
+  check('expanding does not resurrect the bubble', after, 0);
+  handle.dispose();
 }
 
 console.log('english locale');

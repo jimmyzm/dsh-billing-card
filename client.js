@@ -767,8 +767,10 @@ window.__ModuleLoader__.load({
       // (an older Host, no web server) is worth a couple of retries because the
       // Host half registers it a moment after the server starts. After that the
       // built-in copies win and the card stops asking.
+      // Deliberately independent of `wide`: the table is what the card will draw the
+      // moment the sidebar expands, and re-running this effect on every collapse
+      // would blank the prices for a frame (and re-ask a route that has not changed).
       useEffect(() => {
-        if (!wide) return undefined;
         let live = true;
         let timer = null;
         let attempts = 0;
@@ -817,7 +819,7 @@ window.__ModuleLoader__.load({
           if (timer !== null) clearTimeout(timer);
           if (follow !== null) clearTimeout(follow);
         };
-      }, [wide]);
+      }, []);
 
       useEffect(() => {
         if (!wide) return undefined;
@@ -953,8 +955,6 @@ window.__ModuleLoader__.load({
         if (found === null) return { key: null, entry: null };
         return found;
       }, [activeId, activeName, rates]);
-
-      if (!wide) return null;
 
       const amount = numberFormatter(locale, 2);
       const price = priceFormatter(locale);
@@ -1175,6 +1175,13 @@ window.__ModuleLoader__.load({
         setTipAnchor(null);
         setTipBox(null);
       };
+
+      // A collapse unmounts the trigger, so no pointerleave arrives to close the
+      // bubble: its anchor would outlive the word it points at and the bubble would
+      // pop back on the next expand. Close it as soon as the card is not drawn.
+      useEffect(() => {
+        if (!wide) hideTip();
+      }, [wide]);
 
       /** Arms the bubble after a dwell. The trigger rect is read when the pointer
        * lands, so a scrolling sidebar cannot make the bubble chase the word. */
@@ -1414,6 +1421,12 @@ window.__ModuleLoader__.load({
               ],
         ),
       );
+
+      // Every hook above has run, so bailing out here keeps the hook order stable.
+      // Returning earlier would skip the tooltip hooks and make the next expand
+      // throw "Rendered more hooks than during the previous render" — the card then
+      // disappears for good until the page reloads.
+      if (!wide) return null;
 
       return h(
         Fragment,

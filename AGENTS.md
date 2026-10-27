@@ -130,6 +130,12 @@ Hover text is the card's only place for the long explanation, so it follows the 
 - The Client half may only `require('react')` (rendering, `createElement`, no JSX). No other
   module, no globals it does not guard — the hover bubble is drawn here, so there is no platform
   seed left to require.
+- `wide` is a prop, not a mount gate. The component must ask for the same hooks whether or not
+  the sidebar is expanded, so the `if (!wide) return null` sits **after** every hook (currently at
+  the top of the returned tree). Returning earlier skips the bubble's hooks, and the next expand
+  throws "Rendered more hooks than during the previous render" — React then tears the subtree
+  down and the card is gone until the page reloads. The data effect is `[]` on purpose: a
+  collapse must not blank the table for the frame it takes to re-ask the route.
 - The card owns its palette. `CARD_CSS` declares `--dbc-*` tokens on `.dbc-root` with
   `light-dark(light, dark)` values; the app writes `color-scheme` on `<html>`
   (`document.documentElement.style.colorScheme`), so the tokens resolve without reading a host
