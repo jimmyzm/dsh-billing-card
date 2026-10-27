@@ -18,13 +18,11 @@
 
 [功能](#功能) • [截图](#截图) • [安装](#安装) • [工作原理](#工作原理) • [已知边界](#已知边界) • [开发](#开发)
 
+<img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/banners/minimal-zh-1200x320.png" alt="dsh-billing-card —— 余额、单价与谷峰切换的倒计时，都在 DSH 侧边栏" width="880" />
+
 </div>
 
 DSH（DeepSeek Harness）侧边栏底部的一张卡片：余额、它背后的提供商与模型、档单价，以及当前计费时段和下次切换的倒计时。
-
-<div align="center">
-  <img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png" alt="假期中的卡片" width="320" />
-</div>
 
 ## 功能
 
@@ -40,13 +38,7 @@ DSH（DeepSeek Harness）侧边栏底部的一张卡片：余额、它背后的�
 
 真实渲染，侧边栏 256 px、2× 密度。
 
-| 假期 —— `国庆节` | 调休日 —— `调休` |
-| --- | --- |
-| ![假期](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png) | ![调休](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/makeup-chip.png) |
-
-| 英文界面、美元价 | 深色主题 |
-| --- | --- |
-| ![英文界面](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png) | ![深色主题](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/dark-theme.png) |
+<img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png" alt="中文界面：国庆节假期、空闲时段与实时单价" width="576" />
 
 ## 安装
 

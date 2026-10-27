@@ -18,13 +18,11 @@
 
 [Features](#features) • [Screenshots](#screenshots) • [Installation](#installation) • [How it works](#how-it-works) • [Limits](#limits) • [Development](#development)
 
+<img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/banners/minimal-en-1200x320.png" alt="dsh-billing-card — balance, prices and the idle/peak countdown, in the DSH sidebar" width="880" />
+
 </div>
 
 A card in the DSH sidebar footer: the balance, the provider and model behind it, their unit prices, and the current billing period with a countdown to the next switch.
-
-<div align="center">
-  <img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png" alt="The card on a statutory holiday" width="320" />
-</div>
 
 ## Features
 
@@ -38,15 +36,9 @@ A card in the DSH sidebar footer: the balance, the provider and model behind it,
 
 ## Screenshots
 
-Real renders, 256 px sidebar at 2× density.
+Real render, 256 px sidebar at 2× density.
 
-| Holiday — `国庆节` | Make-up workday — `调休` |
-| --- | --- |
-| ![Holiday](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/holiday-banner.png) | ![Make-up](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/makeup-chip.png) |
-
-| English UI, USD prices | Dark theme |
-| --- | --- |
-| ![English UI](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png) | ![Dark theme](https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/dark-theme.png) |
+<img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png" alt="English UI: idle period with live USD unit prices" width="576" />
 
 ## Installation
 
