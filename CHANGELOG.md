@@ -11,13 +11,14 @@ Notable changes to `@jimmyzm/dsh-billing-card`. The format follows [Keep a Chang
 - The countdown moved to the top-left and takes the colour of the current window (green idle, amber peak), matching the chip on the right.
 - The price source split into a snapshot date and a sync mode; the period bubble lists peak, idle and source; the make-up day explains itself in one sentence.
 - Both READMEs open with a 1200×320 banner (Chinese and English); the screenshots were trimmed to one each and now show the live tariffs and a real holiday countdown.
+- The README icon and the package icon are the same file, so the mark is identical in the plugin list and on the repository page.
 
 ### Fixed
 
 - The card disappeared after collapsing and reopening the sidebar: `if (!wide) return null` sat above the hover hooks, so collapsing dropped the hook count from 23 to 14 and React tore the subtree down.
 - Hovering the amount no longer lights up the whole row — only the number itself triggers.
 - The separator between the rows and the note was missing because the rule referenced an undeclared `--dbc-line-2` token, so nothing was painted.
-- The UI no longer shows an impossible 「peak + make-up」 combination.
+- The make-up screenshot no longer draws `Peak` next to `调休`: a make-up day is always a weekend, so the chip only ever sits beside `Idle`.
 
 ### Changed
 
@@ -26,7 +27,7 @@ Notable changes to `@jimmyzm/dsh-billing-card`. The format follows [Keep a Chang
 - The publish job is idempotent: it reads the registry's version document first and skips a version that is already published, and the tarball check uses `npm pack --dry-run`, so a re-run no longer fails on `E403 cannot publish over the previously published versions`.
 - The release-title rule is written down in `AGENTS.md`: the bare tag by default (`v1.2.1`), with an English headline after a dash only for a major feature update.
 - Every release note from 1.0.0 on leads with Chinese and repeats the English version below a rule.
-- The syntax check in all three skills now matches `ci.yml` (one `node --check` per file, then `npm test`).
+- The syntax check in the project skills now matches `ci.yml` (one `node --check` per file, then `npm test`).
 
 
 ## Unreleased

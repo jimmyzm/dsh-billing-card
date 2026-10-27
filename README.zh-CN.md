@@ -107,14 +107,14 @@ Host 半边在每次启动时拉取两份价目表和中国大陆节假日日历
 ## 已知边界
 
 - 价目与节假日在每次启动时读取一次；开放平台余额每 30 秒重新读取。切换提供商时立即重读。
-- 没有配置 `DEEPSEEK_API_KEY` 时显示账号余额。
+- 没有配置 `DEEPSEEK_API_KEY` 时显示账号余额；DSH 账号未登录时改显示开放平台余额，而不是留空。
 - 非 DeepSeek 官方渠道提供的模型不显示价格。
 - 已在 DSH 0.2.1-rc.3 上端到端验证；对 0.2.0-rc.1 而言源码层面的接口一致，只是该版本还不读 `engines.dsh`。
 - 卡片需要 HTTP GUI（`dsh web`）；没有 web 服务器时用内置数据，缺少 `uiSession` / `modelDirectories` 服务时按目录默认模型计价。
 
 ## 开发
 
-无构建步骤：`client.js` 是手写的浏览器模块，`index.js` 与 `parse.js` 是 Host 半边。卡片只渲染自己的子树，只读 `--dsw-alias-*` 主题变量。
+无构建步骤：`client.js` 是手写的浏览器模块，`index.js` 与 `parse.js` 是 Host 半边。卡片只渲染自己的子树，颜色全部由自己的 `--dbc-*` 变量解析，不读宿主主题变量。
 
 ```
 package.json        # dsh.bundle.patch + dsh.client
@@ -125,7 +125,7 @@ locale/             # 插件管理页用的中英文字典
 icon.svg            # 插件图标
 CHANGELOG.md        # 更新日志，中英双份，新的在前
 CHANGELOG.zh-CN.md
-docs/               # README 图标与截图（只在仓库里，不进包）
+docs/               # README 图标、头图、截图与设计审计（只在仓库里，不进包）
 test/               # 离线测试：解析器、Host 路由、Client 渲染
 AGENTS.md           # 面向 Agent 的开发规范（只在仓库里，不进包）
 .agents/skills/     # 面向 Agent 的项目 skills（只在仓库里，不进包）
@@ -138,6 +138,6 @@ AGENTS.md           # 面向 Agent 的开发规范（只在仓库里，不进包
 dsh plugin --profile web add /path/to/dsh-billing-card
 ```
 
-`npm test` 跑离线测试：解析器跑 `test/fixtures` 里抓下来的页面，Host 路由用桩上游，Client 半边跑在迷你 React 运行时里。无依赖、不联网。`AGENTS.md` 里是开发规范和三个项目 skill。
+`npm test` 跑离线测试：解析器跑 `test/fixtures` 里抓下来的页面，Host 路由用桩上游，Client 半边跑在迷你 React 运行时里。无依赖、不联网。`AGENTS.md` 里是开发规范，`.agents/skills/` 里是四个项目 skill。
 
 基于 [MIT 许可](LICENSE)。

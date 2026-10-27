@@ -30,7 +30,7 @@ A card in the DSH sidebar footer: the balance, the provider and model behind it,
 - **Row per fact** — the provider names the row above the model, so you can see which channel the price belongs to.
 - **Unit prices** — input, cached and output for the selected model, in the tier active now; no price when another provider serves the model.
 - **Billing period** — green `Idle` / yellow `Peak`; the countdown to the switch sits top-left, keeps its `Peak in` / `Idle in` wording and takes the period's colour.
-- **Holidays** (Chinese UI) — a blue strip with the holiday's name, and a gray `调休` chip on a make-up workday.
+- **Holidays** (Chinese UI) — a blue strip with the holiday's name, and a gray `调休` (*Make-up*) chip on a make-up workday.
 - **Currency by language** — CNY prices in Chinese, USD everywhere else.
 - **Theme and locale** — light and dark themes from the card's own token layer, zh/en dictionaries, built-in data when an upstream cannot be fetched.
 
@@ -81,9 +81,10 @@ A Chinese UI quotes the CNY page, every other language the USD page. Nothing is 
 
 Each row's trigger is the thing the row is about: the balance amount itself (help cursor, **no**
 underline — the number is already the loudest element on the card, and a dashed rule under it reads
-as a link), the model name (dashed, so the affordance is visible), and the two chips (period,
-`Make-up`), each with the help cursor. The model bubble belongs to the official price list only:
-with another provider the numbers are a reference, not that provider's rates.
+as a link), the model name (dashed, so the affordance is visible), and the chips (the period
+always, `Make-up` in the Chinese UI), each with the help cursor. The model bubble belongs to the
+official price list only: with another provider the numbers are a reference, not that provider's
+rates.
 
 Each bubble is a definition list drawn by the card itself — no host primitive, so it follows the
 theme instead of inheriting a fixed dark plate: one `label → value` row per fact with a green dot
@@ -95,9 +96,9 @@ for recharge money and an amber dot for bonus money, then a rule and a quiet foo
   snapshot date, and how those numbers were obtained (`startup` or `snapshot`).
 
 The period chip lists the peak window (Monday–Friday `09:00-12:00`, then `14:00-18:00`),
-everything the peak leaves idle, and where the calendar comes from; the `Make-up` chip says how a
-make-up workday is billed (idle all day, like a weekend). No bubble repeats a number the card
-already shows. The price block and the holiday banner have no hover text — their text already says
+everything the peak leaves idle, and where the calendar comes from; in the Chinese UI the `Make-up`
+chip says how a make-up workday is billed (idle all day, like a weekend). No bubble repeats a number
+the card already shows. The price block and the holiday banner have no hover text — their text already says
 what they are. The bubble waits 240 ms, flips below the trigger when there is no room above, and
 closes on leave, blur, or `Esc`.
 
@@ -113,7 +114,8 @@ closes on leave, blur, or `Esc`.
 ## Limits
 
 - Prices and holidays are read once per application start; the open-platform balance is re-read every 30 s. A provider switch re-reads it right away.
-- Without a `DEEPSEEK_API_KEY` the card shows the account balance.
+- Without a `DEEPSEEK_API_KEY` the card shows the account balance; signed out of the DSH account it
+  shows the open-platform balance instead of a blank.
 - A model served by a provider other than DeepSeek's own shows no price.
 - Verified end to end on DSH 0.2.1-rc.3; against 0.2.0-rc.1 the source surface is the same, though
   that build does not read `engines.dsh` yet.
@@ -121,7 +123,7 @@ closes on leave, blur, or `Esc`.
 
 ## Development
 
-No build step: `client.js` is a hand-written browser module, `index.js` and `parse.js` are the Host half. The card renders only its own subtree and reads only `--dsw-alias-*` tokens.
+No build step: `client.js` is a hand-written browser module, `index.js` and `parse.js` are the Host half. The card renders only its own subtree and resolves every colour from its own `--dbc-*` layer, so it follows the app's light/dark setting without reading a host variable.
 
 ```
 package.json        # dsh.bundle.patch + dsh.client
@@ -132,7 +134,7 @@ locale/             # zh/en dictionaries for the plugin manager
 icon.svg            # plugin icon
 CHANGELOG.md        # release notes, English and Chinese, newest first
 CHANGELOG.zh-CN.md
-docs/               # README logo and screenshots (repository only, not shipped)
+docs/               # README icon, banners, screenshots and the design audit (repo only, not shipped)
 test/               # offline suite: parsers, host route, client render
 AGENTS.md           # working spec for agents on this repo (repository only, not shipped)
 .agents/skills/     # project skills for agents on this repo (repository only, not shipped)
@@ -145,6 +147,6 @@ To run a local checkout instead of the published package, add the folder — it 
 dsh plugin --profile web add /path/to/dsh-billing-card
 ```
 
-`npm test` runs the offline suite: the parsers against the pages captured in `test/fixtures`, the Host route with a stubbed upstream, and the Client half in a miniature React runtime. No dependencies, no network. `AGENTS.md` holds the working spec and the three project skills for agents.
+`npm test` runs the offline suite: the parsers against the pages captured in `test/fixtures`, the Host route with a stubbed upstream, and the Client half in a miniature React runtime. No dependencies, no network. `AGENTS.md` holds the working spec, and `.agents/skills/` holds the four project skills for agents.
 
 Released under the [MIT license](LICENSE).
