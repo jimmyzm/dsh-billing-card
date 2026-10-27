@@ -52,14 +52,21 @@ so a session rooted at the parent folder loads neither.
 
 Hover text is the card's only place for the long explanation, so it follows the rows.
 
-- One trigger per visual row, and the trigger is that row's **label**, not the row: the balance
-  label explains the balance, the model name explains the unit and the snapshot, and each chip
-  explains itself. A row-wide anchor makes the bubble hang off the card edge instead of the word it
-  belongs to, and fires while the pointer is over a number, which reads as accidental. Give text
-  triggers `dbc-tip-trigger` (cursor + dotted underline, plus a focus ring) so the affordance is
-  visible; a chip is its own affordance and takes the handlers without the class. Never attach the
-  same label to two nested nodes, and never put a tooltip on the price block or the holiday
-  banner — their text already says what they are.
+- One trigger per visual row, and the trigger is the thing the row is about. The amount explains
+  the balance — a `dbc-tip-plain` trigger with cursor help and a focus ring but **no** dashed
+  underline, because the number is already the loudest element and a second affordance reads as a
+  link — and that trigger is the inline box around the money, never the row: `.dbc-amount-row`
+  lays out and `.dbc-amount` answers, so a pointer 100 px right of `¥32.50` is not over the
+  balance. The model name explains the unit and the snapshot, and each chip explains itself. A row-wide anchor
+  makes the bubble hang off the card edge instead of the word it belongs to, and fires while the
+  pointer is over a number, which reads as accidental. Text triggers that need advertising take
+  `dbc-tip-trigger` (cursor + dashed underline); a chip is its own affordance and takes the
+  handlers without a class. Never attach the same label to two nested nodes, and never put a
+  tooltip on the price block or the holiday banner — their text already says what they are.
+- Hover text states a fact about *this* card, so it must not outlive its truth: the model bubble
+  belongs to an official provider only. Another provider bills its own account, and the card's
+  numbers are then a list-price reference, not that provider's rates — so `.dbc-model` gets neither
+  the class nor the handlers when `billsAtListPrice(provider)` is false.
 - The card draws its own bubble. The host primitive was borrowed until 1.3: its surface is a fixed
   dark plate in both themes, which pins one element of a card that owns its light/dark palette to
   somebody else's chrome. Do not reintroduce `@deepseek-ai/dsh-client-ui-primitives`, and do not
@@ -151,11 +158,12 @@ these lists; to make something bigger, move it one step instead of inventing a h
   inside the holiday strip, `4px` between chips. Space around a group exceeds space within it.
 - **Radius**: `14px` card, `10px` price panel, `8px` holiday strip, `6px` make-up tag, `999px`
   chips.
-- **Layout is one row per fact**: label + chips, amount, provider + countdown, model, prices.
-  The amount never shares a line with the countdown — that pair is what clipped six-digit
-  balances at 196 px. Provider names are short, so the countdown rides on the provider line;
-  `.dbc-mrow` is `flex-wrap` anyway, so an unusually long provider pushes the countdown to its
-  own right-aligned line instead of clipping it.
+- **Layout is one row per fact**: countdown + chips, amount, provider, model, prices. The card
+  prints no balance label — the amount is the loudest thing on it and names itself; the word
+  survives as the amount row's `aria-label` (`card.title` / `card.title.api`) so a screen reader
+  still hears what the number is. The amount never shares a line with the countdown — that pair is
+  what clipped six-digit balances at 196 px — and the countdown sits top-left, opposite the chips,
+  because it is the one value that moves every second.
 - **Contrast floor**: 4.5:1 for every text colour on the surface it lands on, in both themes.
   Measured: `--dbc-ink-1` 17.8 / 15.0, `-ink-2` 7.3 / 10.4, `-ink-3` 5.1 / 7.0 (and 4.7 / 6.2 on
   `-surface-2`), chip text 4.7 green / 4.6 amber on its own tint (7.5 / 7.7 dark), blue 6.7 /

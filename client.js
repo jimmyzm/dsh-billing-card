@@ -612,23 +612,23 @@ window.__ModuleLoader__.load({
       '.dbc-holiday-text{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.dbc-holiday-meta{flex:0 0 auto;margin-left:auto;font-weight:400;color:var(--dbc-ink-3)}',
       // label line: title on the left, state chips on the right
-      '.dbc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}',
-      '.dbc-title{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 11px/14px var(--dbc-font);color:var(--dbc-ink-3)}',
-      '.dbc-chips{display:flex;align-items:center;gap:4px;flex:0 0 auto}',
+      '.dbc-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;min-width:0}',
+      '.dbc-chips{display:flex;align-items:center;gap:4px;flex:0 0 auto;margin-left:auto}',
       '.dbc-chip{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;height:18px;padding:0 7px;border-radius:999px;font:500 11px/14px var(--dbc-font);white-space:nowrap;cursor:help}',
       '.dbc-chip-idle{background:var(--dbc-green-bg);color:var(--dbc-green)}',
       '.dbc-chip-peak{background:var(--dbc-amber-bg);color:var(--dbc-amber)}',
       '.dbc-chip-makeup{height:17px;padding:0 6px;border-radius:var(--dbc-r-tag);background:var(--dbc-surface-3);color:var(--dbc-ink-3)}',
       '.dbc-dot{width:5px;height:5px;border-radius:50%;background:currentColor}',
       // the amount owns a full-width line; long values shrink instead of clipping
-      '.dbc-amount{display:flex;align-items:baseline;gap:3px;min-width:0;font-size:20px;line-height:25px;font-weight:660;letter-spacing:-.02em;color:var(--dbc-ink-1);white-space:nowrap}',
+      '.dbc-amount-row{display:flex;align-items:baseline;gap:3px;min-width:0}',
+      '.dbc-amount{display:inline-flex;align-items:baseline;gap:3px;min-width:0;max-width:100%;font-size:20px;line-height:25px;font-weight:660;letter-spacing:-.02em;color:var(--dbc-ink-1);white-space:nowrap}',
       '.dbc-amount-small{font-size:17px;line-height:22px;letter-spacing:-.01em}',
       '.dbc-code{flex:0 0 auto;font:400 11px/14px var(--dbc-font);letter-spacing:0;color:var(--dbc-ink-3)}',
       '.dbc-note{font:400 13px/18px var(--dbc-font);letter-spacing:0;color:var(--dbc-ink-3)}',
       // provider line: provider on the left, countdown on the right, both on one line
       '.dbc-mrow{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 6px;min-width:0}',
       '.dbc-provider{flex:0 0 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 11px/14px var(--dbc-font);color:var(--dbc-ink-3)}',
-      '.dbc-clock{flex:0 0 auto;margin-left:auto;font:500 11px/14px var(--dbc-font);white-space:nowrap}',
+      '.dbc-clock{flex:0 0 auto;font:500 11px/14px var(--dbc-font);white-space:nowrap}',
       '.dbc-clock-idle{color:var(--dbc-green)}',
       '.dbc-clock-peak{color:var(--dbc-amber)}',
       '.dbc-model{align-self:flex-start;max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 11px/14px var(--dbc-font);color:var(--dbc-ink-1)}',
@@ -638,7 +638,8 @@ window.__ModuleLoader__.load({
       '.dbc-price-value{white-space:nowrap;font:650 13px/16px var(--dbc-font);color:var(--dbc-ink-1)}',
       '.dbc-price-empty{grid-column:1 / -1;font:400 11px/14px var(--dbc-font);color:var(--dbc-ink-3)}',
       '.dbc-tip-trigger{cursor:help;border-bottom:1px dashed color-mix(in srgb,var(--dbc-ink-3) 35%,transparent)}',
-      '.dbc-tip-trigger:focus-visible{outline:2px solid color-mix(in srgb,var(--dbc-blue) 55%,transparent);outline-offset:2px}',
+      '.dbc-tip-plain{cursor:help}',
+      '.dbc-tip-plain:focus-visible,.dbc-tip-trigger:focus-visible{outline:2px solid color-mix(in srgb,var(--dbc-blue) 55%,transparent);outline-offset:2px}',
       // The bubble is a fixed dark surface in both themes, so its accents are fixed
       // too: the theme-aware --dbc-* colours would land dark-on-dark in light mode.
       '.dbc-tip{position:fixed;z-index:2147483000;display:flex;flex-direction:column;max-width:248px;box-sizing:border-box;padding:8px 10px;border:1px solid var(--dbc-line);border-radius:10px;background:var(--dbc-surface);color:var(--dbc-ink-1);box-shadow:0 6px 24px -8px rgba(15,17,21,.28),0 1px 3px rgba(15,17,21,.08);font:400 11px/14px var(--dbc-font);font-variant-numeric:tabular-nums;text-align:left;white-space:normal;pointer-events:none}',
@@ -999,6 +1000,8 @@ window.__ModuleLoader__.load({
       let balanceMain = null;
       let balanceNote = null;
       let balanceHint = null;
+      // The card no longer prints a balance label, but the number still needs a name
+      // for screen readers, so the same word rides on the amount row as its aria-label.
       let titleKey = 'card.title';
 
       const apiBalance = remote.deepseek;
@@ -1371,19 +1374,46 @@ window.__ModuleLoader__.load({
               ),
             );
 
-      // One visual row per fact: label line, amount line, provider line, model
-      // line, price block. The amount never shares a line with the countdown, so
-      // a six-digit balance and a two-week countdown can both be complete.
+      // One visual row per fact: countdown + chips, amount, provider, model, price
+      // block. The amount never shares a line with the countdown, so a six-digit
+      // balance and a two-week countdown can both be complete.
       const amountText = balanceMain === null ? null : balanceMain.text;
-      const amountRow =
-        amountText === null
-          ? h('div', { className: 'dbc-amount' }, h('span', { className: 'dbc-note' }, balanceNote))
-          : h(
-              'div',
-              { className: 'dbc-amount' + (amountText.length > AMOUNT_SMALL_AT ? ' dbc-amount-small' : '') },
-              balanceMain.code === null ? null : h('span', { className: 'dbc-code' }, balanceMain.code),
-              amountText,
-            );
+      // The amount carries the balance's hover text. It is the thing being explained,
+      // so it is the thing you point at; no dashed underline, because the number is
+      // already the loudest element on the card and a second affordance reads as a link.
+      // The row lays out; the amount itself is the trigger. Wrapping the whole row
+      // would make the empty half of the card answer for the number, so the handlers
+      // sit on the inline box that is exactly as wide as the money.
+      const amountRow = h(
+        'div',
+        { className: 'dbc-amount-row' },
+        h(
+          'span',
+          Object.assign(
+            {
+              // A notice has nothing to explain, so it takes no help cursor either. A
+              // real balance does — including the sub-cent「不足 0.01」row, which is an
+              // amount with a breakdown, not a notice.
+              className:
+                'dbc-amount' +
+                (balanceHint === null ? '' : ' dbc-tip-plain') +
+                (amountText !== null && amountText.length > AMOUNT_SMALL_AT ? ' dbc-amount-small' : ''),
+              // The visible label is gone, so the number carries its name for assistive
+              // tech. `role="group"` is what makes the name legal here: a bare `span` is
+              // a generic element and ARIA forbids naming it from the author.
+              role: balanceHint === null ? undefined : 'group',
+              'aria-label': balanceHint === null ? undefined : tr(titleKey),
+            },
+            tipTrigger(balanceHint),
+          ),
+          amountText === null
+            ? h('span', { className: 'dbc-note' }, balanceNote)
+            : [
+                balanceMain.code === null ? null : h('span', { key: 'code', className: 'dbc-code' }, balanceMain.code),
+                amountText,
+              ],
+        ),
+      );
 
       return h(
         Fragment,
@@ -1404,17 +1434,13 @@ window.__ModuleLoader__.load({
                   h('span', { className: 'dbc-holiday-text', title: holidayBanner }, holidayBanner),
                   holidayMeta === null ? null : h('span', { className: 'dbc-holiday-meta' }, holidayMeta),
                 ),
-            // The trigger is the label, not the row: hovering a number should never
-            // open an explanation, and a row-wide anchor makes the bubble sit flat
-            // against the card edge instead of hanging off the word it explains.
+            // The countdown opens the card: it is the one number that changes every
+            // second, so it belongs where the eye lands first, and the chips answer
+            // the same question from the right.
             h(
               'div',
               { className: 'dbc-head' },
-              h(
-                'span',
-                Object.assign({ className: 'dbc-title dbc-tip-trigger' }, tipTrigger(balanceHint)),
-                tr(titleKey),
-              ),
+              countdown === null ? null : h('span', { className: 'dbc-clock dbc-clock-' + tier }, countdown),
               h(
                 'span',
                 { className: 'dbc-chips' },
@@ -1434,18 +1460,16 @@ window.__ModuleLoader__.load({
               ),
             ),
             amountRow,
-            // Provider and countdown share a line because both are short; the
-            // countdown keeps its "to peak / to idle" wording and takes the
-            // current period's colour, so it cannot be mistaken for a duration.
-            h(
-              'div',
-              { className: 'dbc-mrow' },
-              h('span', { className: 'dbc-provider' }, providerLabel),
-              countdown === null ? null : h('span', { className: 'dbc-clock dbc-clock-' + tier }, countdown),
-            ),
+            h('div', { className: 'dbc-mrow' }, h('span', { className: 'dbc-provider' }, providerLabel)),
+            // Only an official provider is billed from the table, so only then is
+            // there a price story to tell; another provider bills its own account and
+            // the card shows its list prices as a reference, not as that provider's rates.
             h(
               'span',
-              Object.assign({ className: 'dbc-model dbc-tip-trigger' }, tipTrigger(modelTip)),
+              Object.assign(
+                { className: 'dbc-model' + (official ? ' dbc-tip-trigger' : '') },
+                tipTrigger(official ? modelTip : null),
+              ),
               modelLabel,
             ),
             pricedNode,

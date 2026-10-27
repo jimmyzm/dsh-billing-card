@@ -31,7 +31,7 @@ A card in the DSH sidebar footer: the balance, the provider and model behind it,
 - **Balance** — the DSH account balance (recharge + bonus) or the DeepSeek open-platform balance behind your API key, whichever the selected provider bills; it follows the provider in the composer.
 - **Row per fact** — the provider names the row above the model, so you can see which channel the price belongs to.
 - **Unit prices** — input, cached and output for the selected model, in the tier active now; no price when another provider serves the model.
-- **Billing period** — green `Idle` / yellow `Peak`; the countdown to the switch keeps its `Peak in` / `Idle in` wording and takes the period's colour.
+- **Billing period** — green `Idle` / yellow `Peak`; the countdown to the switch sits top-left, keeps its `Peak in` / `Idle in` wording and takes the period's colour.
 - **Holidays** (Chinese UI) — a blue strip with the holiday's name, and a gray `调休` chip on a make-up workday.
 - **Currency by language** — CNY prices in Chinese, USD everywhere else.
 - **Theme and locale** — light and dark themes from the card's own token layer, zh/en dictionaries, built-in data when an upstream cannot be fetched.
@@ -87,9 +87,11 @@ A Chinese UI quotes the CNY page, every other language the USD page. Nothing is 
 
 ### Hover text
 
-A dotted underline marks the two row labels — `Balance` and the model name — and nothing else: one
-trigger per row, never the number itself. The two chips (period, `Make-up`) are triggers too and keep
-the help cursor, but no underline, because three dashed rules in a 232 px card read as noise.
+Each row's trigger is the thing the row is about: the balance amount itself (help cursor, **no**
+underline — the number is already the loudest element on the card, and a dashed rule under it reads
+as a link), the model name (dashed, so the affordance is visible), and the two chips (period,
+`Make-up`), each with the help cursor. The model bubble belongs to the official price list only:
+with another provider the numbers are a reference, not that provider's rates.
 
 Each bubble is a definition list drawn by the card itself — no host primitive, so it follows the
 theme instead of inheriting a fixed dark plate: one `label → value` row per fact with a green dot

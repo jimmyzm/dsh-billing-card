@@ -480,32 +480,59 @@ for (const [label, now, expectedPeriod, expectedCountdown] of CASES) {
   check(label + ' prices', JSON.stringify(values), JSON.stringify(expectedPrices));
 }
 
+console.log('head row');
+{
+  const { tree } = await mount({ now: Date.parse('2026-10-25T16:52:00Z'), balance: READY_BALANCE, catalog: CATALOG });
+  const head = byClass(tree, 'dbc-head');
+  // The countdown is the head's first child, before the chips: the pair is what
+  // the row is for, and the amount never shares a line with the moving number.
+  check('head opens with the countdown', head.children[0].props.className, 'dbc-clock dbc-clock-idle');
+  check('head countdown text', text(head.children[0]), '距高峰 08:08:00');
+  check('head closes with the chips', head.children[1].props.className, 'dbc-chips');
+  check('head holds exactly two children', head.children.length, 2);
+  // The provider row lost the countdown; it is the provider's line alone.
+  const mrow = byClass(tree, 'dbc-mrow');
+  check('provider row has one child', mrow.children.length, 1);
+  check('provider row is the provider', mrow.children[0].props.className, 'dbc-provider');
+  check('countdown left the provider row', byClass(mrow, 'dbc-clock'), null);
+  // The balance label is gone; the word survives only as the amount's aria-label.
+  check('no balance label in the tree', classes(tree).some((name) => name.split(' ').includes('dbc-title')), false);
+}
+
 console.log('data shapes');
-for (const [label, balance, expected, expectedTitle] of [
-  ['signed-out', { ok: true, value: null }, '未登录', undefined],
-  ['failed-read', { ok: false, error: 'boom' }, '读取失败', undefined],
-  ['platform-failed', { ok: true, value: { status: 'failed' } }, '读取失败', undefined],
-  ['empty-wallets', { ok: true, value: { status: 'ready', value: [], bonusWallets: [] } }, '读取失败', undefined],
-  ['tiny-amount', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0.004' }], bonusWallets: [] } }, '¥不足 0.01', null],
-  ['usd-only', { ok: true, value: { status: 'ready', value: [{ currency: 'USD', balance: '7.5' }], bonusWallets: [] } }, '$7.50', null],
-  ['cents-exact', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12.34' }], bonusWallets: [] } }, '¥12.34', null],
-  ['cents-truncated', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0.999' }], bonusWallets: [] } }, '¥0.99', null],
-  ['large-amount', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12345.678' }], bonusWallets: [] } }, '¥12,345.67', null],
-  ['negative-rounds-to-zero', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '-0.004' }], bonusWallets: [] } }, '¥0.00', null],
-  ['zero-balance', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0' }], bonusWallets: [] } }, '¥0.00', null],
-  ['sub-cent-rounds-up-edge', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0.01' }], bonusWallets: [] } }, '¥0.01', null],
+for (const [label, balance, expected, expectedLabel, expectedTip] of [
+  ['signed-out', { ok: true, value: null }, '未登录', undefined, undefined],
+  ['failed-read', { ok: false, error: 'boom' }, '读取失败', undefined, undefined],
+  ['platform-failed', { ok: true, value: { status: 'failed' } }, '读取失败', undefined, undefined],
+  ['empty-wallets', { ok: true, value: { status: 'ready', value: [], bonusWallets: [] } }, '读取失败', undefined, undefined],
+  ['tiny-amount', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0.004' }], bonusWallets: [] } }, '¥不足 0.01', '余额', 'trigger'],
+  ['usd-only', { ok: true, value: { status: 'ready', value: [{ currency: 'USD', balance: '7.5' }], bonusWallets: [] } }, '$7.50', '余额', 'trigger'],
+  ['cents-exact', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12.34' }], bonusWallets: [] } }, '¥12.34', '余额', 'trigger'],
+  ['cents-truncated', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0.999' }], bonusWallets: [] } }, '¥0.99', '余额', 'trigger'],
+  ['large-amount', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12345.678' }], bonusWallets: [] } }, '¥12,345.67', '余额', 'trigger'],
+  ['negative-rounds-to-zero', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '-0.004' }], bonusWallets: [] } }, '¥0.00', '余额', 'trigger'],
+  ['zero-balance', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0' }], bonusWallets: [] } }, '¥0.00', '余额', 'trigger'],
+  ['sub-cent-rounds-up-edge', { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0.01' }], bonusWallets: [] } }, '¥0.01', '余额', 'trigger'],
 ]) {
   const { tree } = await mount({ now: Date.parse('2026-10-25T16:52:00Z'), balance });
   // The amount row always exists: an amount, or a single notice inside it.
-  const note = byClass(tree, 'dbc-amount');
-  check(label + ' balance text', text(note), expected);
-  // The headline label is the trigger, and only a real amount has anything to say.
+  const amount = byClass(tree, 'dbc-amount');
+  check(label + ' balance text', text(amount), expected);
+  // The amount itself is the trigger. It gets the help cursor and the focus
+  // ring (`dbc-tip-plain`), never the dashed underline a text link would take,
+  // and a notice with nothing to explain does not even take the cursor.
+  check(label + ' amount takes the plain affordance', amount.props.className.split(' ').includes('dbc-tip-plain'), expectedTip === 'trigger');
+  check(label + ' amount is never dashed', amount.props.className.split(' ').includes('dbc-tip-trigger'), false);
+  // A failed or empty read has nothing to explain, so its notice carries no
+  // tooltip; every amount — including a sub-cent one, whose composition still
+  // adds up — keeps the breakdown on the number itself.
+  check(label + ' amount tooltip', amount.props['data-dbc-tip'], expectedTip);
+  check(label + ' amount names itself', amount.props['aria-label'], expectedLabel);
+  // A bare div is `generic`, which ARIA forbids naming from the author; the
+  // group role is what makes the label legal, so it must track it exactly.
+  check(label + ' amount carries the naming role', amount.props.role, expectedLabel === undefined ? undefined : 'group');
   const head = byClass(tree, 'dbc-head');
-  const trigger = byClass(tree, 'dbc-title');
   check(label + ' row is not a trigger', head.props['data-dbc-tip'], undefined);
-  check(label + ' trigger is marked', trigger.props.className.split(' ').includes('dbc-tip-trigger'), true);
-  if (expectedTitle === undefined) check(label + ' tooltip is absent', trigger.props['data-dbc-tip'], undefined);
-  else check(label + ' tooltip is a trigger', trigger.props['data-dbc-tip'], 'trigger');
   const values = findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-value').map(text);
   check(label + ' still prices model', values.length, 3);
 }
@@ -539,17 +566,22 @@ console.log('english locale');
   const { tree } = handle;
   check('en chip', text(byClass(tree, 'dbc-chip')).trim(), 'Idle');
   check('en countdown', text(byClass(tree, 'dbc-clock')), 'Peak in 08:08:00');
-  check('en title', text(byClass(tree, 'dbc-title')), 'Balance');
+  check('en title names the amount', byClass(tree, 'dbc-amount').props['aria-label'], 'Balance');
   check('en tooltip quotes USD', (await tipOf(handle, 'dbc-model')).includes('USD per 1M tokens'), true);
   const values = findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-value').map(text);
   check('en prices come from the USD table', JSON.stringify(values), JSON.stringify(['0.15', '0.003', '0.60']));
   check('en price labels', JSON.stringify(findAll(tree, (n) => typeof n.props.className === 'string' && n.props.className === 'dbc-price-label').map(text)), JSON.stringify(['Input', 'Cache read', 'Output']));
   // The unit is no longer a row of its own: it lives inside the model bubble.
+  // Only text that has to advertise itself takes the dashed underline; the
+  // amount is a plain trigger and the chip is its own affordance, so both carry
+  // the handlers without it.
   const triggers = findAll(
     tree,
     (n) => typeof n.props.className === 'string' && n.props.className.split(' ').includes('dbc-tip-trigger'),
   ).map((n) => n.props.className);
-  check('en keeps one trigger per row', JSON.stringify(triggers), JSON.stringify(['dbc-title dbc-tip-trigger', 'dbc-model dbc-tip-trigger']));
+  check('en keeps one dashed trigger per row', JSON.stringify(triggers), JSON.stringify(['dbc-model dbc-tip-trigger']));
+  check('en amount is a plain trigger', byClass(tree, 'dbc-amount').props['data-dbc-tip'], 'trigger');
+  check('en chip is its own trigger', byClass(tree, 'dbc-chip').props['data-dbc-tip'], 'trigger');
   check('en balance spells its currency code', text(byClass(tree, 'dbc-code')), 'CNY');
   // The code span has no trailing space; the row's flex gap separates the two.
   check('en amount follows the code', text(byClass(tree, 'dbc-amount')), 'CNY¥32.50');
@@ -612,10 +644,10 @@ console.log('balance total');
   check('the price block carries no tooltip', byClass(tree, 'dbc-prices').props['data-dbc-tip'], undefined);
   check(
     'bubble lists every wallet',
-    await tipOf(handle, 'dbc-title'),
+    await tipOf(handle, 'dbc-amount'),
     '充值 | CNY ¥32.50 | 赠送 | CNY ¥10.00 | DSH 账号余额（含赠金），每 30 秒刷新',
   );
-  const accountTip = await tipOf(handle, 'dbc-title');
+  const accountTip = await tipOf(handle, 'dbc-amount');
   check('the bubble never repeats the total', accountTip.includes('合计') || accountTip.includes('42.50'), false);
   check('the row is not a trigger', byClass(tree, 'dbc-head').props['data-dbc-tip'], undefined);
 
@@ -638,7 +670,7 @@ console.log('balance total');
   check('recharge currency wins', text(byClass(tree, 'dbc-amount')), '$5.00');
   check(
     'foreign bonus still listed',
-    await tipOf(handle, 'dbc-title'),
+    await tipOf(handle, 'dbc-amount'),
     '充值 | USD $5.00 | 赠送 | CNY ¥1.00 | DSH 账号余额，每 30 秒刷新',
   );
 
@@ -670,10 +702,10 @@ console.log('amount row');
     balance: wallets([{ currency: 'CNY', balance: '12345678.90' }], []),
     catalog: CATALOG,
   });
-  check('a long amount shrinks', byClass(wide.tree, 'dbc-amount').props.className, 'dbc-amount dbc-amount-small');
+  check('a long amount shrinks', byClass(wide.tree, 'dbc-amount').props.className, 'dbc-amount dbc-tip-plain dbc-amount-small');
   check('a long amount keeps every digit', text(byClass(wide.tree, 'dbc-amount')), '¥12,345,678.90');
   const short = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG });
-  check('a short amount keeps the full size', byClass(short.tree, 'dbc-amount').props.className, 'dbc-amount');
+  check('a short amount keeps the full size', byClass(short.tree, 'dbc-amount').props.className, 'dbc-amount dbc-tip-plain');
 }
 
 console.log('provider line');
@@ -796,8 +828,19 @@ console.log('prices need a DeepSeek provider');
 
   // A lookalike id is not DeepSeek's provider: the set is explicit.
   const lookalike = { ok: true, value: { default: { provider: 'llm-deepseek', model: 'deepseek-v4-pro' }, groups: [] } };
-  const { tree: alias } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: lookalike });
+  const aliasHandle = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: lookalike });
+  const alias = aliasHandle.tree;
   check('a lookalike provider id stays foreign', priced(alias).length, 0);
+  // Its model bubble would claim rates the card is not quoting, so the model
+  // line keeps neither the class nor the handlers. The rest of the card is
+  // still interactive: the balance and the chip explain themselves.
+  const aliasModel = byClass(alias, 'dbc-model');
+  check('a foreign provider gets no model trigger class', aliasModel.props.className, 'dbc-model');
+  check('a foreign provider gets no model bubble', aliasModel.props['data-dbc-tip'], undefined);
+  check('a foreign provider model is not focusable', aliasModel.props.tabIndex, undefined);
+  check('the amount still explains the balance', byClass(alias, 'dbc-amount').props['data-dbc-tip'], 'trigger');
+  check('the amount bubble still opens', (await tipOf(aliasHandle, 'dbc-amount')).includes('DSH 账号余额'), true);
+  check('the chip bubble still opens', (await tipOf(aliasHandle, 'dbc-chip')).includes('周一至周五'), true);
 
   // Every id in the official set prices at list; anything else does not.
   for (const provider of ['deepseek', 'deepseek-official', 'deepseek-account', 'DeepSeek-Official']) {
@@ -1100,13 +1143,13 @@ console.log('balance follows the provider');
   live.select('session-1', { provider: 'deepseek-account', model: 'deepseek-v4-pro' });
   let next = await pump();
   check('a non-official provider leads with the account balance', text(byClass(next, 'dbc-amount')), '¥32.50');
-  check('and its title names the account', text(byClass(next, 'dbc-title')), '余额');
+  check('and its label names the account', byClass(next, 'dbc-amount').props['aria-label'], '余额');
   check(
     'and its bubble describes only the account',
-    await tipOf(handle, 'dbc-title'),
+    await tipOf(handle, 'dbc-amount'),
     '充值 | CNY ¥32.50 | 赠送 | CNY ¥0.00 | DSH 账号余额（含赠金），每 30 秒刷新',
   );
-  check('the account bubble never mentions the API', (await tipOf(handle, 'dbc-title')).includes('开放平台'), false);
+  check('the account bubble never mentions the API', (await tipOf(handle, 'dbc-amount')).includes('开放平台'), false);
 
   // Selecting the API-key provider moves the headline to the open-platform balance.
   live.select('session-1', { provider: 'deepseek-official', model: 'deepseek-chat' });
@@ -1114,23 +1157,23 @@ console.log('balance follows the provider');
   check('the API provider switches the amount', text(byClass(next, 'dbc-amount')), '¥110.00');
   // The headline states the total, so the bubble decomposes it and never repeats it
   // as a row: the rows are exactly the parts that add up to it.
-  check('the API bubble never repeats the total as a row', (await tipOf(handle, 'dbc-title')).includes('110.00'), false);
-  check('and no row repeats the total', (await tipOf(handle, 'dbc-title')).includes('合计'), false);
-  check('and the title follows', text(byClass(next, 'dbc-title')), 'API 余额');
+  check('the API bubble never repeats the total as a row', (await tipOf(handle, 'dbc-amount')).includes('110.00'), false);
+  check('and no row repeats the total', (await tipOf(handle, 'dbc-amount')).includes('合计'), false);
+  check('and the label follows', byClass(next, 'dbc-amount').props['aria-label'], 'API 余额');
   check(
     'and the bubble is the API composition only',
-    await tipOf(handle, 'dbc-title'),
+    await tipOf(handle, 'dbc-amount'),
     '充值 | CNY ¥100.00 | 赠金 | CNY ¥10.00 | DeepSeek 开放平台余额，每 30 秒刷新',
   );
-  check('the API bubble never mentions DSH', (await tipOf(handle, 'dbc-title')).includes('DSH'), false);
-  check('the API bubble never lists the account bonus', (await tipOf(handle, 'dbc-title')).includes('赠送'), false);
-  check('the API bubble never carries the account amount', (await tipOf(handle, 'dbc-title')).includes('¥32.50'), false);
+  check('the API bubble never mentions DSH', (await tipOf(handle, 'dbc-amount')).includes('DSH'), false);
+  check('the API bubble never lists the account bonus', (await tipOf(handle, 'dbc-amount')).includes('赠送'), false);
+  check('the API bubble never carries the account amount', (await tipOf(handle, 'dbc-amount')).includes('¥32.50'), false);
 
   // Switching back is the same, in the other direction.
   live.select('session-1', { provider: 'deepseek-account', model: 'DeepSeek-Flash' });
   next = await pump();
   check('switching back restores the account balance', text(byClass(next, 'dbc-amount')), '¥32.50');
-  check('and the account title', text(byClass(next, 'dbc-title')), '余额');
+  check('and the account label', byClass(next, 'dbc-amount').props['aria-label'], '余额');
 
   // The price gate is wider than the balance gate: `deepseek` still quotes the
   // official table while the account balance leads.
@@ -1235,8 +1278,10 @@ console.log('balance follows the provider');
   // The notice owns the amount row and nothing dresses it up as money.
   check('and is not dressed up as an amount', JSON.stringify(byClass(tree, 'dbc-amount').children.map((n) => n.props.className)), JSON.stringify(['dbc-note']));
   check('and the notice carries no currency code', byClass(tree, 'dbc-code'), null);
-  check('and the title stays the account one', text(byClass(tree, 'dbc-title')), '余额');
+  // The row is a notice, not an amount, so it names no amount and explains none.
+  check('and the notice names no amount', byClass(tree, 'dbc-amount').props['aria-label'], undefined);
   check('the notice carries no tooltip', note.props['data-dbc-tip'], undefined);
+  check('and the amount row carries none either', byClass(tree, 'dbc-amount').props['data-dbc-tip'], undefined);
 }
 
 {
@@ -1247,8 +1292,9 @@ console.log('balance follows the provider');
   const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
   const note = byClass(tree, 'dbc-note');
   check('a failed API read is its own notice', text(note), '读取失败，稍后重试');
-  check('a failed API read keeps the account title', text(byClass(tree, 'dbc-title')), '余额');
+  check('a failed API read names no amount', byClass(tree, 'dbc-amount').props['aria-label'], undefined);
   check('the failed notice carries no tooltip', note.props['data-dbc-tip'], undefined);
+  check('and the amount row carries none either', byClass(tree, 'dbc-amount').props['data-dbc-tip'], undefined);
   check('and does not claim the key is missing', text(note).includes('未配置 API Key'), false);
 
   const en = await mountLocalized('en', {
@@ -1286,7 +1332,7 @@ console.log('balance follows the provider');
   tick.callback();
   const next = await pump();
   check('the next tick picks the balance up', text(byClass(next, 'dbc-amount')), '¥110.00');
-  check('and drops the missing-key line', (await tipOf(handle, 'dbc-title')).includes('未配置 API Key'), false);
+  check('and drops the missing-key line', (await tipOf(handle, 'dbc-amount')).includes('未配置 API Key'), false);
 }
 
 {
@@ -1303,10 +1349,10 @@ console.log('balance follows the provider');
   });
   const { tree } = handle;
   check('a signed-out account falls back to the API balance', text(byClass(tree, 'dbc-amount')), '¥110.00');
-  check('and the title follows the API balance', text(byClass(tree, 'dbc-title')), 'API 余额');
+  check('and the label follows the API balance', byClass(tree, 'dbc-amount').props['aria-label'], 'API 余额');
   check(
     'and the API bubble describes the API only',
-    await tipOf(handle, 'dbc-title'),
+    await tipOf(handle, 'dbc-amount'),
     '充值 | CNY ¥100.00 | 赠金 | CNY ¥10.00 | DeepSeek 开放平台余额，每 30 秒刷新',
   );
 }
@@ -1337,7 +1383,7 @@ for (const [label, deepseek, expected] of [
   const data = livePayload();
   const { tree } = await mount({ now: IDLE_NOW, balance: READY_BALANCE, catalog: CATALOG, services: live.services, data });
   check('an absent API route falls back to the account balance', text(byClass(tree, 'dbc-amount')), '¥32.50');
-  check('with the account title', text(byClass(tree, 'dbc-title')), '余额');
+  check('with the account label', byClass(tree, 'dbc-amount').props['aria-label'], '余额');
 
   const signedOut = await mount({
     now: IDLE_NOW,
@@ -1363,7 +1409,7 @@ for (const [label, deepseek, expected] of [
   });
   check('english spells the API currency code', text(byClass(tree, 'dbc-code')), 'CNY');
   check('english API amount follows the code', text(byClass(tree, 'dbc-amount')), 'CNY¥110.00');
-  check('english title', text(byClass(tree, 'dbc-title')), 'API balance');
+  check('english label', byClass(tree, 'dbc-amount').props['aria-label'], 'API balance');
 }
 
 console.log('currency per language');
@@ -1730,11 +1776,11 @@ console.log('bubble bodies');
     balance: wallets([{ currency: 'CNY', balance: '32.50' }], [{ currency: 'CNY', balance: '10.00' }]),
     catalog: CATALOG,
   });
-  const { bubble } = await openTip(handle, 'dbc-title');
+  const { bubble } = await openTip(handle, 'dbc-amount');
   check('account bubble is a .dbc-tip', bubble === null ? null : bubble.props.className, 'dbc-tip');
   // The bubble is the only hover text: the trigger carries no native title.
-  check('account trigger is marked', byClass(handle.tree, 'dbc-title').props['data-dbc-tip'], 'trigger');
-  check('account trigger carries no title', byClass(handle.tree, 'dbc-title').props.title, undefined);
+  check('account trigger is marked', byClass(handle.tree, 'dbc-amount').props['data-dbc-tip'], 'trigger');
+  check('account trigger carries no native title', byClass(handle.tree, 'dbc-amount').props.title, undefined);
 
   const rows = tipRows(bubble);
   check('account row count', rows.length, 2);
@@ -1770,7 +1816,7 @@ console.log('bubble bodies');
   live.select('session-1', { provider: 'deepseek-official', model: 'deepseek-chat' });
   const tree = await handle.pump();
   check('the API bubble explains the headline', text(byClass(tree, 'dbc-amount')), '¥110.00');
-  const { bubble } = await openTip(handle, 'dbc-title');
+  const { bubble } = await openTip(handle, 'dbc-amount');
 
   const rows = tipRows(bubble);
   check('API row count', rows.length, 2);
@@ -1875,7 +1921,7 @@ console.log('hover bubble');
     catalog: CATALOG,
     data: livePayload({ holidays: { days: [dayOf(2026, 10, 1)], years: [2026] } }),
   });
-  const trigger = () => byClass(handle.tree, 'dbc-title');
+  const trigger = () => byClass(handle.tree, 'dbc-amount');
   const event = () => ({ currentTarget: { getBoundingClientRect: () => ({ ...TRIGGER_BOX }) } });
   /** Arms a dwell with a captured timer, so the test never waits for it. */
   const arm = (invoke) => {
