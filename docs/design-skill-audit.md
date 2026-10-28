@@ -7,15 +7,31 @@
 > **定位**：本文件是审计证据与决策记录，**不是规范**。设计数值的唯一权威是
 > `.agents/skills/dsh-card-design/SKILL.md` 的 **Values**；`AGENTS.md` 只保留业务不变量与兼容性守卫。
 >
+> **读这一页的顺序**——这里混着三种内容，别一起读：
+>
+> - **历史记录**：第 1–7 节与第 8 节的验证结果是 2026-10 审计当时跑出来的证据。`已确认` 说的是「当时执行过、
+>   看到过」，不是「今天仍然如此」；引用任何一条之前，先重跑它给出的命令。
+> - **当前规范**：只有一个地方——skill 的 **Values**。本文件没有一条数值可以当规范引用。
+> - **未完成事项**：全部在第 6 节（`--dbc-label-quiet` 的去向、对比度数值是否需要重测）。它们至今**没有**关闭：
+>   读到「当时记作 4.71:1」不等于「已经查清今天的值是 4.71:1」。
+>
 > **2026-10-29 的整理**：这些数值已从 `AGENTS.md` 迁入该 skill，正文里的 `AGENTS.md:NNN` 一律改为章节名
 > （那些行号现在指向别处，`AGENTS.md` 已瘦身到一百多行）。正文里的 `client.js:NNN` 是 2026-10 的快照，请按同一行
 > 给出的标识符（token 名、类名、常量名）定位。除此之外正文保持原样。
+>
+> 这次整理目前只在 `preview` 分支（`67c2049` 起），**尚未合入 `main`**。打了标签的 `v1.3.0`（`689e463`）里仍是
+> 旧分工：`AGENTS.md` 251 行、数值写在它的 `## Design scale` 与 `## Hover text` 里；skill 202 行，开头就写着
+> 「The *values* live in `AGENTS.md`」。同一句「数值已迁入 skill」在两条分支上真假相反，读之前先确认自己在哪条
+> 分支上——分支名只说明改动停在哪里，不说明它已经完成。本文凡是给出结论性状态的地方，都附了提交号或命令；没附的，
+> 一律按历史记录读。
 
 标记约定：
 
 - **已确认** —— 本会话中我亲自执行、抓取或读取得到的证据（命令、文件、行号、提交）。
 - **来源待确认** —— 只能确认技能内容与作者声明，无法确认上游的某个具体版本/提交。
 - **推测** —— 不写。凡属推测一律落在第 6 节，等人工补充。
+
+三个标记都只对**审计当时**有效。2026-10-29 没有重新取证的历史条目，一律按历史记录读，不当作现状。
 
 ---
 
@@ -111,7 +127,7 @@
 | 折叠不得卸载组件（hook 数量恒定） | `client.js:729`；提交 `3e70a92`；`AGENTS.md` → **Layout and compatibility guards** |
 | 声明了却没人用的 token 会让线「失踪」 | 提交 `d652196`；新增的静态断言（`test/client.test.mjs`） |
 | 截图价格必须来自线上 | `docs/screenshots/*` 由 `curl http://127.0.0.1:<port>/deepseek-billing-card/data` 的真实表生成；`asOf 2026-10-28` |
-| 不可出现「高峰 + 调休」这类不可达状态 | 用户 m07153 指出；已改 `docs/screenshots/*`（提交 `b60a8a2`、`3e70a92` 之后的工作区） |
+| 不可出现「高峰 + 调休」这类不可达状态 | 用户 m07153 指出。原写作「已改 `docs/screenshots/*`（…之后的工作区）」，但历史里找不到这次更改：那两张图（`makeup-chip.png`、`dark-theme.png`）在 `ba9942f` 里是被**删除**，不是重画；现存 `holiday-banner.png`（`b60a8a2`）与 `english-usd.png`（`659f711`）。2026-10-29 只按提交核对了文件，未复核这两张图的渲染状态 |
 
 设计链路的提交顺序（供追溯，重设计本身没有独立提交，搭在 tooltip 那次改动里）：
 
@@ -135,8 +151,8 @@ ba9942f                                              ← 换 banner、统一 ico
    安装命令以你给的标准形式记录：`npx skills add https://github.com/nextlevelbuilder/ui-ux-pro-max-skill --skill banner-design`。
 4. **`ui-taste` 的获取地址**：命令用的是 `https://uizze.sh/`（用户指定），它与 `uizze.com` 的关系、以及该站点是否对应一个公开仓库，**来源待确认**。
 5. ~~`docs/screenshots/` 的旧图~~：`makeup-chip.png`、`dark-theme.png` 已在 `ba9942f` 中随 README 精简一并删除，仓库里只剩 `holiday-banner.png` 与 `english-usd.png`。上一版报告误写成「仍在仓库里」，此处更正。
-6. **`--dbc-label-quiet` 的去向**：第 2.2 节记录当时为压暗标签色新增了这个 token，但当前 `client.js` 与 skill 都没有它。它是否就是今天的 `--dbc-ink-3`（skill 记 5.1 / 7.0，与当年的 4.71 不同）**未能确认**；维护者 2026-10-29 回复：本轮无法确认，留待后续复测。
-7. **对比度数值未复测**：2.05:1、3.71:1、4.71:1 与 skill 里的 17.8 / 15.0 等都是当时在渲染结果上实测的，2026-10-29 只核对了它们是否仍只出现在一处，没有重新取色 —— 同属留待后续复测。
+6. **`--dbc-label-quiet` 的去向**：第 2.2 节记录当时为压暗标签色新增了这个 token，但当前 `client.js` 与 skill 都没有它。它是否就是今天的 `--dbc-ink-3`（skill 记 5.1 / 7.0，与当年的 4.71 不同）**未能确认**；维护者 2026-10-29 回复：本轮无法确认，留待后续复测。2026-10-29 又查了一步：`git log --all -S'dbc-label-quiet' -- client.js` **无输出**，token 名只出现在本文件里，仓库任何提交的 `client.js` 都没写过它——所以「当时新增过这个 token」本身也只有本节这句自述，没有提交可佐证。这一条仍未关闭。
+7. **对比度数值未复测**：2.05:1、3.71:1、4.71:1 与 skill 里的 17.8 / 15.0 等都是当时在渲染结果上实测的，2026-10-29 只核对了它们是否仍只出现在一处（结论：`AGENTS.md` 已不再重复这些数，skill 的 **Contrast** 与 **Failure handling** 表各出现一次），没有重新取色 —— 同属留待后续复测，仍未关闭。
 
 ### 顺带发现的「文档 vs 代码」不一致
 
@@ -159,18 +175,23 @@ ba9942f                                              ← 换 banner、统一 ico
 
 ---
 
-## 8. 自检记录（本次）
+## 8. 自检记录（审计当时）
 
 - **数值一致性**：新 skill 引用的 `11 / 13 / 17 / 20`、`650+`、`4.5:1`、12% 墨色分隔线等，逐条对照当时的 Design scale 段与 `client.js`，一致。初稿曾把间距刻度写成 `4 / 6 / 8 / 12`，实际是 `4 / 5 / 6 / 8 / 10 / 12`，已按原文更正（今天的刻度见 skill 的 **Scale**）。
 - **代码清理**（本轮附带，用户要求，提交 `d1d28d4`）：删除死代码 `client.js` 中 `.dbc-price-empty` 规则、字典里的 `card.balance.total` 与 `card.schedule`（中英各一条，合计 2 键 4 条）、两条过期注释；用 `node --check` 与整套测试验证，断言数保持 1004。
 - **Markdown / frontmatter**：两份文件各 1 个一级标题、无跳级标题、无制表符与行尾空格、围栏配对、表格均有表头分隔行；frontmatter 为 `name` + `description` + `whenToUse`，与 `.agents/skills/{dsh-plugin-development,billing-regression-testing,release-verification}` 同构。
-- **重复与冲突**：新 skill 的 32 条要点与 `AGENTS.md`、三个既有 skill 的逐条比对结果是 0 处逐字重复；当时的分工是「`AGENTS.md` 管数值与不变量，skill 只写怎么判断、怎么验证」。**2026-10-29 起对调**：数值归 skill 的 **Values**，`AGENTS.md` 只留业务不变量与兼容性守卫，本文件不承担任何规范条目。
+- **重复与冲突**：新 skill 的 32 条要点与 `AGENTS.md`、三个既有 skill 的逐条比对结果是 0 处逐字重复；当时的分工是「`AGENTS.md` 管数值与不变量，skill 只写怎么判断、怎么验证」。**2026-10-29 起对调**：数值归 skill 的 **Values**，`AGENTS.md` 只留业务不变量与兼容性守卫，本文件不承担任何规范条目。这次对调目前只在 `preview` 分支生效（见开头），`v1.3.0` 里仍是旧分工。
 - **测试**：`node --check` 三个运行时文件通过；`npm test` **1004 PASS / 0 FAIL**（新增文档未被任何测试引用，结果与改动前一致）。
 - **技能目录**：按用户要求删除 vendored 的 `.agents/skills/banner-design/`（`840a28e` 引入，`d1d28d4` 删除），改回第三方安装；仓库内只剩四个项目自有 skill。
-- **未 commit / push / release / publish**：改动留在工作区等你审核。
+- **未 commit / push / release / publish**〔历史记录，状态已在 2026-10-29 核实〕：审计当时改动留在工作区等审核。
+  此后它们分别落在 `62fd320`（skill 与本文件）、`d1d28d4`（死代码、字典键、vendored skill 的删除）、
+  `a758bff`（`.dbc-note` 行高）、`ba9942f`（banner、icon、截图）里，且都已包含在打了标签的 `v1.3.0`
+  （`689e463`）中。这一行记录的是当时的边界，不是待办；本文件自身在 2026-10-29 又有一次整理（`67c2049`）。
 
-## 附：本次的边界
+## 附：审计当时的边界
 
 - **计费与拼装逻辑未动**：`client.js` 只删了死代码与过期注释（`.dbc-price-empty`、两个字典键、两条注释），`index.js` / `parse.js` / 测试 / `AGENTS.md` 均未修改。
-- **未 commit / push / release / publish**：删除 vendored skill 后的 `git rm` 只是暂存，等你审核。
+- **未 commit / push / release / publish**〔历史记录〕：删除 vendored skill 后的 `git rm` 当时只是暂存。这次删除后来随
+  `d1d28d4` 一并提交（同一提交里还删了 `client.js` 的 `.dbc-price-empty`、`card.balance.total`、`card.schedule` 与
+  两条过期注释），并进入了 `v1.3.0`。
 - **没有把第三方 skill 的正文搬进本仓库**：新 skill 的措辞是按本项目重新写的，只保留来源归属。

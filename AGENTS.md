@@ -20,7 +20,7 @@ the skill a task loads; where a skill states a procedural rule, that skill is au
 | `client.js` | Client half: the card, its dictionaries, its CSS, the built-in snapshot | page refresh |
 | `package.json`, `cordis.patch.yml` | Manifest, `engines.dsh`, the bundle patch | re-add the bundle **and** restart |
 | `test/` | Offline suite (`npm test`): parsers on captured fixtures, Host against a stubbed `fetch`, Client in a miniature React | — |
-| `.agents/skills/`, `docs/` | Skills and design records; repository-only, never shipped. `docs/design-skill-audit.md` is provenance, never a second source of values | — |
+| `.agents/skills/`, `docs/` | Skills and design records; repository-only, never shipped. `docs/design-skill-audit.md` is provenance and history — never a second source of values, and its open items are questions, not rules | — |
 
 Prices and the calendar are startup snapshots. On this route the open-platform balance is the only value that moves
 while the app runs; the account balance beside it is not cached here but re-read from the account service on the same
