@@ -92,8 +92,11 @@ Every task, every file. Breaking one is a bug, not a design choice.
   `icon.svg`, both READMEs, both CHANGELOGs, `LICENSE`. `test/`, `docs/`, `.agents/`, `AGENTS.md` and `.github/` stay
   out of the tarball.
 - **Keep `README.md` (English, default) and `README.zh-CN.md` in step**: same sections, same facts, cross-linked.
-  Every release updates `CHANGELOG.md` and `CHANGELOG.zh-CN.md` together, newest first, with the same content as the
-  release notes. The note format itself is in `release-verification`.
+  Every release updates `CHANGELOG.md` and `CHANGELOG.zh-CN.md` together, newest first.
+- **A release's notes and its two changelog sections describe one release.** They agree on the version, on which
+  features, fixes, compatibility changes and limits shipped, and on what upgrading costs — not on wording, order or
+  count. The notes may merge entries, reword them or cut detail; they may not drop a key change or claim one the
+  changelogs and the commit range do not support. `release-verification` → **step 6** owns the check.
 - **Commit messages** are Conventional Commits with no scope: `feat:` `fix:` `docs:` `test:` `ci:` `chore:`
   `refactor:`, then a lowercase imperative summary of one purpose, 72 characters at most —
   `fix: keep the card mounted when the sidebar collapses`. Two purposes are two commits, however small the diff.
@@ -122,7 +125,7 @@ Load the skill the task's *subject* belongs to. The skill owns the procedure; th
 | `dsh-plugin-development` | The Host/Client split, route registration, refresh and retry mechanics, install and debug | Any change to `index.js`, `parse.js`, `client.js`, the manifest or the locale files; a new data source; "nothing shows", "the price is stale" |
 | `dsh-card-design` | The values: tokens, type and spacing scale, contrast, row order, truncation, the bubble and its timing | Anything visual or textual: a row, chip, state or notice, a token or theme change, bubble structure or copy, screenshots and banners |
 | `billing-regression-testing` | Test-case design, the period boundary table, deterministic time, fixture refreshes | The billing rule, the parsers, money precision, provider or currency selection, fallbacks — and any bug that needs a failing case first |
-| `release-verification` | The release procedure: pre-flight, tag and notes, artifact and provenance checks | A version bump, tag, release or publish, or proving a published artifact matches the tree |
+| `release-verification` | The release procedure: pre-flight, notes, their reconciliation with both changelogs, tag, artifact and provenance checks | A version bump, tag, release or publish, or proving a published artifact matches the tree |
 
 If a skill and this file disagree, this file wins and the skill is stale. User-facing behaviour, sources and limits
 are in `README.md` / `README.zh-CN.md`.

@@ -1,13 +1,14 @@
 ---
 name: release-verification
-description: Verify this package before a commit that moves the version or ships it, then validate the artifact that comes back — tarball contents, install path, provenance. Every step leaves one line for the report.
-whenToUse: Bumping package.json (version, files, exports, dsh.*) or cordis.patch.yml; cutting a tag or GitHub release; or proving that a published npm artifact matches this tree and installs into DSH.
+description: Verify this package before a commit that moves the version or ships it, then validate the artifact that comes back — notes against both changelogs, tarball contents, install path, provenance. Every step leaves one line for the report.
+whenToUse: Bumping package.json (version, files, exports, dsh.*) or cordis.patch.yml; cutting a tag or GitHub release; reconciling release notes with the two changelogs; or proving that a published npm artifact matches this tree and installs into DSH.
 ---
 
 # Release verification
 
-A release is verified when the numbers match the repo, not when the commands ran. A step you did not run is not a
-step you may report as passed, and "should pass" is not "passed".
+A release is verified when the numbers match the repo and the notes and both changelogs describe one release — not
+when the commands ran. A step you did not run is not a step you may report as passed, "should pass" is not "passed",
+and a script that counts bullets cannot tell you that two texts agree.
 
 ## Before you start
 
@@ -45,8 +46,9 @@ step you may report as passed, and "should pass" is not "passed".
    It must expose `DATA_PATH` and `apply`, and `./parse.js` must resolve from the installed path.
 4. Check the manifest tells the truth: `version` equals the tag you are about to cut; `repository` / `homepage` /
    `bugs` use the lowercase `jimmyzm/dsh-billing-card` path; `files` still matches step 2.
-5. Write the release notes **from the changelog**, not by hand. Start by listing everything the tag will contain and
-   checking that each commit is claimed by the new section:
+5. Assemble the release notes from the changelog — every line has a source there, but the notes are not a copy of
+   it. Start by listing everything the tag will contain and checking that each commit is claimed by the new
+   section:
 
    ```bash
    git log --oneline $(git describe --tags --abbrev=0)..HEAD
@@ -62,8 +64,11 @@ step you may report as passed, and "should pass" is not "passed".
    `## 🧩 兼容性`, `## ⬆️ 升级`; English `## ✨ What's New`, `## 🐛 Fixed`, `## 🧩 Compatibility`,
    `## ⬆️ Upgrade`. Keep only the sections that carry a line — an absent section beats an empty one — and the
    upgrade snippet names the version being released (`add @jimmyzm/dsh-billing-card@<version>`), so the command
-   reproduces the notes rather than whatever is newest. Every bullet names a commit in the range; that is what makes
-   the notes auditable rather than promotional.
+   reproduces the notes rather than whatever is newest.
+
+   The notes may merge related entries, drop a detail or use fewer words: they are what a user reads before
+   upgrading, not a second changelog. What they may not do is lose a key change or gain a claim — step 6 is the
+   check, and it is cheaper than an edit after publication.
 
    Compatibility is the one section a version does not earn on its own. Open it only when upgrading costs the user
    something — a migration step, a changed behaviour, a dropped Host version. Reassurance ("no new dependency, the
@@ -73,27 +78,92 @@ step you may report as passed, and "should pass" is not "passed".
    its origin — `(first noted in 1.3.0)` / 「（首次出现于 1.3.0）」 — while the release that birthed the note
    stays bare, so the last version in the chain still separates new entries from carried-forward ones. A user
    who skips two releases still reads what will break. The changelog's `### Compatibility` follows the same
-   rule, because the two files are diffed against each other below.
-6. Cut the tag and the release; publishing runs from `.github/workflows/publish.yml` on the release event, using npm
+   rule, because the notes and that section have to agree on what upgrading costs.
+
+   Write them to a file rather than into the release command, so step 6 reads exactly what step 7 will publish:
+
+   ```bash
+   tag=v1.3.0
+   notes=$(mktemp "${TMPDIR:-/tmp}/dbc-rel.XXXXXX") || exit 1
+   echo "$notes"   # write the notes here, then carry this path into steps 6 and 7
+   ```
+
+6. Reconcile the notes with both changelogs — before the release exists, while a correction is still free.
+
+   Name the version and the three texts first: the tag (`v1.3.0`), the heading it must match (`## 1.3.0`), and one
+   section per changelog plus the notes file. No language is ever compared with the other: each notes block is read
+   against the changelog of its own language.
+
+   ```bash
+   tag=v1.3.0
+   node .agents/skills/release-verification/reconcile-notes.mjs --tag "$tag" --notes "$notes"
+   ```
+
+   It prints the headings it found, an inventory of both changelog sections and both notes blocks with stable ids
+   (`zh#1…`, `en#1…`, `zh-n#1…`), and `PASS` / `FAIL` / `REVIEW` for what a machine can decide: the version heading
+   exists once in both files, both headings carry the same date, the body is not empty, it splits into one Chinese
+   and one English block **in either order** (a `---` inside a fenced snippet does not split it), and every pinned
+   install command names this version. Exit `0` means those checks passed; the script prints that this is not
+   agreement between the texts, and it never decrees one.
+
+   The rest is reading. One row per changelog entry, one table per language:
+
+   | id | changelog entry | in the notes | verdict |
+   | --- | --- | --- | --- |
+   | `zh#1` | 卡片重做：首行是倒计时… | `zh-n#1` | covered |
+   | `zh#7` | 说明文字的行高（`18px` → `16px`） | — | omitted: 2 px, nothing to act on |
+
+   - **Covered** — one entry, one bullet; the wording is free to differ.
+   - **Merged** — several entries, one bullet: name every id in the cell. The counts then differ, which is legal.
+   - **Omitted** — allowed only when no user acts on or notices the change. A new capability, a changed behaviour,
+     a fix for something visible, a compatibility cost and a limit a user can hit are **key**; omitting one fails
+     the release however small the diff is.
+   - Every id in the inventory lands in exactly one row. A row you cannot decide is `UNVERIFIED` — not "probably
+     fine", and never counted as covered.
+
+   Then turn it around: every notes bullet traces to a changelog entry or to a commit in
+   `git log <previous-tag>..<tag>`. A bullet about something that shipped earlier, or about something no entry and
+   no commit supports, is a release-note bug: drop the claim, or add the changelog entry if the change is real.
+
+   Last, the two changelogs against each other: pair the entries (`zh#1 ↔ en#1` …) and confirm each version records
+   the same set of changes. They are two editions of one record, so a one-sided entry is a changelog bug, not a
+   style choice. Pair them by hand, never by diffing the text.
+
+   Three verdicts, decided and reported separately:
+
+   - `中文 CHANGELOG` — the section exists, its entries are changes in this range, and none of the range is missing.
+   - `英文 CHANGELOG` — the same, and it lists the same set as the Chinese file.
+   - `Release Notes` — every key change appears in both languages, and no line lacks a source.
+
+   Two `PASS` and one `UNVERIFIED` is not a pass. The release ships on three `PASS`, with the omission rows stated
+   and their reasons.
+
+7. Cut the tag and the release; publishing runs from `.github/workflows/publish.yml` on the release event, using npm
    trusted publishing (OIDC).
 
    ```bash
-   git tag v<version> && git push origin v<version>
-   gh release create v<version> --title "v<version>" --notes-file /tmp/rel-<version>.md
-   gh release view v<version> --json name,tagName --jq '.name + " " + .tagName'   # name == tag
+   tag=v1.3.0
+   test -s "$notes" || { echo "empty notes: $notes"; exit 1; }   # $notes: the file step 6 reconciled
+   git tag "$tag" && git push origin "$tag"
+   gh release create "$tag" --title "$tag" --notes-file "$notes"
+   gh release view "$tag" --json name,tagName --jq '.name + " " + .tagName'   # name == tag
    gh run watch   # on the publish run
    ```
 
-   Fold the changelog section into the notes file rather than retyping it, then prove they agree:
+   What the release carries must be the file step 6 reconciled. `gh` adds one newline to the body, so compare the
+   two with the trailing blanks removed rather than byte for byte:
 
    ```bash
-   diff <(sed -n '/^## <version>/,/^## /p' CHANGELOG.zh-CN.md | grep '^- ') \
-        <(gh release view v<version> --json body --jq .body | grep '^- ')
+   work=$(mktemp -d "${TMPDIR:-/tmp}/dbc-post.XXXXXX") || exit 1
+   gh release view "$tag" --json body --jq .body > "$work/published.md" || exit 1
+   diff -u <(printf '%s\n' "$(cat "$notes")") <(printf '%s\n' "$(cat "$work/published.md")") \
+     && echo "published body == the reviewed file"
+   rm -rf "$work"
    ```
 
-   `<version>` is the changelog's own heading (`## 1.3.0`), which carries no `v` even though the tag does. Passing
-   `v1.3.0` there matches no heading and yields an empty diff, which reads as agreement — check that the left side
-   actually lists the bullets before trusting the result.
+   Any other difference means the body was edited after the review, so the reconciliation no longer describes what
+   shipped: re-run step 6 against the published body (`--notes -` reads stdin), then publish the fix with
+   `gh release edit "$tag" --notes-file "$notes"`.
 
    The workflow refuses a tag whose name is neither `v<version>` nor `<version>`, so a mismatch fails before anything
    is published. **Never run `npm publish` locally** — provenance only exists when the workflow signs it. The job is
@@ -102,7 +172,8 @@ step you may report as passed, and "should pass" is not "passed".
    versions`. Do not read that skip as a failure, and do not bump the version just to re-run. Editing a release
    afterwards does **not** re-publish — the workflow reacts to `published` (plus a manual dispatch) — so a wrong title
    or a missing bullet is cheap to fix.
-7. Validate the artifact that came back:
+
+8. Validate the artifact that came back:
 
    ```bash
    npm view @jimmyzm/dsh-billing-card version dist-tags time --json
@@ -111,20 +182,37 @@ step you may report as passed, and "should pass" is not "passed".
    ```
 
    `dist-tags.latest` must be the new version and the attestation must point at this repository and this tag. For the
-   artifact itself, `shasum` equality only means something when every file has the same **mode** as the tagged tree:
-   npm packs the working tree's modes, and a `0600` file becomes `0644` on a fresh CI checkout, which changes the
-   shasum while the bytes stay identical. Normalise first, then compare:
+   artifact itself, pack the **tagged tree**, not the working copy: `git archive` restores git's own modes
+   (`0644` / `0755`), so the checkout is left alone and no `chmod` is needed. Compare contents first; the shasum only
+   means something once the modes match.
 
    ```bash
-   chmod 644 $(git ls-files)
-   git archive <tag> | tar x -C /tmp/tag
-   mkdir -p /tmp/reg /tmp/regx && npm pack --pack-destination /tmp/reg && tar xzf /tmp/reg/*.tgz -C /tmp/regx
-   cd /tmp/regx/package && find . -type f | while read -r f; do cmp -s "$f" "/tmp/tag/$f" || echo "DIFF $f"; done
+   set -o pipefail      # otherwise a failing `git archive` looks like an empty extraction
+   tag=v1.3.0           # the tag under verification
+   work=$(mktemp -d "${TMPDIR:-/tmp}/dbc-verify.XXXXXX") || exit 1
+   mkdir -p "$work/tag" "$work/reg" "$work/regx" || exit 1
+
+   git archive "$tag" | tar x -C "$work/tag" || exit 1            # modes come from git, not the checkout
+   ( cd "$work/tag" && npm pack --pack-destination "$work/reg" ) || exit 1
+   tar xzf "$work"/reg/*.tgz -C "$work/regx" || exit 1
+
+   ( cd "$work/regx/package" && find . -type f | while read -r f; do
+       cmp -s "$f" "$work/tag/$f" || echo "DIFF $f"
+     done )
+
+   shasum -a 1 "$work"/reg/*.tgz     # against `npm view @jimmyzm/dsh-billing-card dist.shasum`
+   rm -rf "$work"                    # only once the report line is written
    ```
 
-   With the modes normalised the local pack reproduces the registry tarball byte for byte (equal `shasum`); when it
-   does not, compare the extracted trees and report a content diff — never a "mismatch" that is only a file mode.
-8. Install acceptance, in a real profile:
+   Zero `DIFF` lines and an equal shasum mean the registry serves this tag. A differing shasum with every file equal
+   is a **mode** difference, not a content one: name the files with the line below and `chmod` only those, never the
+   tree — the tree is what is being verified. If a step fails, the directory is kept: read the error, then delete it.
+
+   ```bash
+   git ls-files | xargs ls -l | awk '$1 !~ /^d/ && $1 !~ /r..r..r../ { print $1, $NF }'
+   ```
+
+9. Install acceptance, in a real profile:
 
    ```bash
    dsh plugin --profile <name> add @jimmyzm/dsh-billing-card@<version>
@@ -139,8 +227,13 @@ step you may report as passed, and "should pass" is not "passed".
 ## Verification
 
 Every step leaves a one-line answer: the assertion count, the file list and sizes, the loaded `Object.keys`, the
-**commit range and the section that claims each commit**, the release title against the tag, the notes-vs-changelog
-diff (empty), the version/shasum/integrity, the run URL and conclusion, the install result and the route status.
+**commit range and the section that claims each commit**, the release title against the tag, the version/shasum/
+integrity, the run URL and conclusion, the install result and the route status.
+
+The documents get three verdicts of their own — `中文 CHANGELOG`, `英文 CHANGELOG`, `Release Notes` — each `PASS`,
+`FAIL` or `UNVERIFIED`, with the two mapping tables, every omission and its reason, and every row still unresolved.
+The mechanical run is quoted with its exit code and labelled mechanical: `AUTOMATED: PASS` is never reported as "the
+notes match the changelogs", because nothing has compared them.
 
 ## Failure handling
 
@@ -151,11 +244,23 @@ diff (empty), the version/shasum/integrity, the run URL and conclusion, the inst
   the check.
 - `npm view` says the package is not found or too new: the publish run had not finished; re-check the run before
   concluding anything.
-- Shasum mismatch: first rule out file modes (`0600` vs `0644` in the tar header). If the members still differ, the
-  published tarball came from a different tree — compare the extracted files against `git archive <tag>` and fix the
-  tree, never the published tag.
+- Shasum mismatch: the pack came from a tree whose modes differ (`0600` vs `0644` in the tar header). Pack
+  `git archive <tag>` instead of the working copy; only if the members still differ is it a different tree — then fix
+  the tree, never the published tag.
 - The release title is the product name plus the version (`DSH 计费卡片 v1.3.0`): that is not the rule.
   `gh release edit <tag> --title <tag>`.
+- `reconcile-notes.mjs` exits `2`: read the `FAIL` lines — a version heading missing from a changelog, two headings
+  dated differently, a body that does not split into Chinese and English, an install command pinning another version
+  or `@latest`. Fix the document, never the script.
+- A changelog entry the notes drop and that is not plainly non-key: add the bullet, or record the omission and the
+  reason. Silence is neither, and "it is in the changelog" is not an argument — a reader of the release page never
+  opens it.
+- A notes bullet with no changelog entry and no commit behind it claims something that did not ship: drop it, or add
+  the changelog entry if the change is real.
+- Counts that differ while the mapping is complete are legal — one bullet can carry three entries. The mapping
+  decides, not the number.
+- The published body differs from the reviewed file: the release was edited after step 6, so the verdicts describe
+  a text nobody can read. Re-run step 6 on the published body, then `gh release edit --notes-file`.
 - `## 未发布` / `## Unreleased` has entries that are months old: they shipped in some earlier version and nobody claimed
   them. Fold them into that version — changelog bugs, not a backlog — and leave the forward section for what is
   genuinely after the newest tag.
@@ -169,3 +274,5 @@ diff (empty), the version/shasum/integrity, the run URL and conclusion, the inst
 - Adding `docs/`, `test/`, `.agents/` or `AGENTS.md` back to `files[]` to "make the README work".
 - A version bump that is not matched by a tag and a changelog-worthy README line.
 - Reporting "published" from a workflow that has not finished, or "installed" without the restart note.
+- Reporting the notes as verified because the counts matched, the bullets diffed clean, or the script exited `0`.
+- Checking a notes block against the changelog of the other language, or diffing the two changelogs as text.
