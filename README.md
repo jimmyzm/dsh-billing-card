@@ -16,137 +16,106 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-[Features](#features) • [Screenshots](#screenshots) • [Installation](#installation) • [How it works](#how-it-works) • [Limits](#limits) • [Development](#development)
-
 <img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/banners/minimal-en-1200x320.png" alt="dsh-billing-card — balance, prices and the idle/peak countdown, in the DSH sidebar" width="880" />
 
 </div>
 
-A card in the DSH sidebar footer: the balance, the provider and model behind it, their unit prices, and the current billing period with a countdown to the next switch.
-
 ## Features
 
-- **Balance** — the DSH account balance (recharge + bonus) or the DeepSeek open-platform balance behind your API key, whichever the selected provider bills; it follows the provider in the composer.
-- **Row per fact** — the provider names the row above the model, so you can see which channel the price belongs to.
-- **Unit prices** — input, cached and output for the selected model, in the tier active now; no price when another provider serves the model.
-- **Billing period** — green `Idle` / yellow `Peak`; the countdown to the switch sits top-left, keeps its `Peak in` / `Idle in` wording and takes the period's colour.
-- **Holidays** (Chinese UI) — a blue strip with the holiday's name, and a gray `调休` (*Make-up*) chip on a make-up workday.
-- **Currency by language** — CNY prices in Chinese, USD everywhere else.
-- **Theme and locale** — light and dark themes from the card's own token layer, zh/en dictionaries, built-in data when an upstream cannot be fetched.
+- View the balance that pays for the selected model: your DSH account balance, or the DeepSeek Open Platform balance behind your API key.
+- Check the input, cached and output prices per million tokens for the selected model, at the tier in effect now.
+- See whether you are in a peak or idle period, with a countdown to the next switch.
+- See whether today is a statutory holiday or a make-up workday in the Chinese UI.
+- See prices in CNY in the Chinese UI and in USD in every other language.
+- Follow the app's language and light/dark theme; built-in data covers a source that cannot be read.
 
 ## Screenshots
 
 Real render, 256 px sidebar at 2× density.
 
-<img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png" alt="English UI: idle period with live USD unit prices" width="576" />
+<img src="https://raw.githubusercontent.com/jimmyzm/dsh-billing-card/main/docs/screenshots/english-usd.png" alt="English UI with model prices and the current billing period" width="576" />
 
 ## Installation
 
-The package is published on npm ([`@jimmyzm/dsh-billing-card`](https://npmx.dev/package/@jimmyzm/dsh-billing-card)) as a DSH bundle. Use the profile you actually run (`desktop` for the desktop app, `web` for `dsh web`):
-
-Requires DSH 0.2.0-rc.1 or newer — `package.json` declares the range in `engines.dsh`, and the
-manifest fields, the footer slot, and the `locale` and `webServer` services it uses all exist in
-that release.
+Install from npm:
 
 ```bash
 dsh plugin --profile web add @jimmyzm/dsh-billing-card
 ```
 
-The same as **Install from npm** on the DSH plugin page. Refresh the GUI afterwards — the card appears at the bottom of the sidebar and hides itself when the sidebar is collapsed to the icon rail.
+Use the `desktop` profile for the desktop app, `web` for `dsh web`.
 
-> [!IMPORTANT]
-> A plugin's Host half loads once per application start, so **restart the application after installing or upgrading**. Until then the card runs on its built-in data.
+To upgrade to the latest release:
 
-Requires a DSH build with the Web GUI, the sidebar footer slot and the account service. To uninstall:
+```bash
+dsh plugin --profile web add @jimmyzm/dsh-billing-card@latest
+```
+
+Restart DSH after installing or upgrading. The card appears at the bottom of the sidebar and hides when the sidebar collapses to the icon rail.
+
+Requires DSH 0.2.0-rc.1 or later, below 0.3.0, with the Web GUI, the sidebar footer slot, and the account and model-catalogue services. Tested end to end on DSH 0.2.1-rc.3.
+
+To uninstall:
 
 ```bash
 dsh plugin --profile web remove @jimmyzm/dsh-billing-card
 ```
 
-## How it works
+## Billing and pricing
 
-The Host half fetches both price tables and the China mainland holiday calendar once per application start and serves them on `GET /deepseek-billing-card/data`; the Client half is a React component in `sidebar.footer.action` that reads that route, follows the composer's model picker, and refreshes the balance every 30 s.
+Peak hours are Beijing time, Monday to Friday, 09:00–12:00 and 14:00–18:00. Chinese statutory holidays are excluded from peak; all other times are idle.
 
-Switching to the provider that bills the open platform asks the Host for a fresh balance at once, so the amount follows the switch instead of the next tick.
+Prices depend on the selected model and the period in effect. The Chinese UI quotes CNY prices, every other language USD prices, and the two are never converted into each other.
 
-### Billing window
+Models served by other providers are not given DeepSeek's official prices.
 
-Peak is Beijing time, Monday to Friday, 09:00–12:00 and 14:00–18:00, excluding Chinese statutory holidays; everything else is idle.
+## Balance and data sources
 
-### Currency
+The card follows the provider selected in the composer:
 
-A Chinese UI quotes the CNY page, every other language the USD page. Nothing is converted; the balance keeps its wallet currency.
+- DSH account balance, including recharge and bonus amounts.
+- DeepSeek Open Platform balance, read with the configured `DEEPSEEK_API_KEY`.
 
-### Hover text
+Both are refreshed every 30 s; switching the provider re-reads both at once, and a credential change re-reads the Open Platform balance. Without an API key the card keeps showing the DSH account balance. If the selected provider bills the Open Platform, the balance area says `No API key` instead.
 
-Each row's trigger is the thing the row is about: the balance amount itself (help cursor, **no**
-underline — the number is already the loudest element on the card, and a dashed rule under it reads
-as a link), the model name (dashed, so the affordance is visible), and the chips (the period
-always, `Make-up` in the Chinese UI), each with the help cursor. The model bubble belongs to the
-official price list only: with another provider the numbers are a reference, not that provider's
-rates.
+Data sources:
 
-Each bubble is a definition list drawn by the card itself — no host primitive, so it follows the
-theme instead of inheriting a fixed dark plate: one `label → value` row per fact with a green dot
-for recharge money and an amber dot for bonus money, then a rule and a quiet footnote.
+- Account balance and selected model: the DSH account service and the composer's model selection.
+- Open Platform balance: `GET https://api.deepseek.com/user/balance`, with the `DEEPSEEK_API_KEY` stored on the Models page (the launch environment is the fallback).
+- Model prices: [English pricing](https://api-docs.deepseek.com/quick_start/pricing/) · [Chinese pricing](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/).
+- Chinese holidays: [iCloud holiday calendar](https://calendars.icloud.com/holidays/cn_zh.ics).
 
-- **Balance** — what the headline adds up to: recharge, bonus, and how often it is re-read. The
-  open-platform balance reads the same way and never mentions the account.
-- **Model** — a price quote needs four facts, so it states four: the model id, the unit, the
-  snapshot date, and how those numbers were obtained (`startup` or `snapshot`).
+Prices and holiday data are fetched at application startup. When a source cannot be read, its built-in copy stands in.
 
-The period chip lists the peak window (Monday–Friday `09:00-12:00`, then `14:00-18:00`),
-everything the peak leaves idle, and where the calendar comes from; in the Chinese UI the `Make-up`
-chip says how a make-up workday is billed (idle all day, like a weekend). No bubble repeats a number
-the card already shows. The price block and the holiday banner have no hover text — their text already says
-what they are. The bubble waits 240 ms, flips below the trigger when there is no room above, and
-closes on leave, blur, or `Esc`.
+## Limitations
 
-### Data sources
-
-| What | Source |
-| --- | --- |
-| Account balance, model | DSH account service; the composer's model selection |
-| Open-platform balance | `GET https://api.deepseek.com/user/balance`, authorised with the `DEEPSEEK_API_KEY` credential the Models page stores (the launch environment is the fallback) |
-| Prices | <https://api-docs.deepseek.com/zh-cn/quick_start/pricing/> and <https://api-docs.deepseek.com/quick_start/pricing/> |
-| Holidays | <https://calendars.icloud.com/holidays/cn_zh.ics> |
-
-## Limits
-
-- Prices and holidays are read once per application start; the open-platform balance is re-read every 30 s. A provider switch re-reads it right away.
-- Without a `DEEPSEEK_API_KEY` the card shows the account balance; signed out of the DSH account it
-  shows the open-platform balance instead of a blank.
-- A model served by a provider other than DeepSeek's own shows no price.
-- Verified end to end on DSH 0.2.1-rc.3; against 0.2.0-rc.1 the source surface is the same, though
-  that build does not read `engines.dsh` yet.
-- The card needs the HTTP GUI (`dsh web`); without a web server it runs on the built-in copies, and without the `uiSession` / `modelDirectories` services it prices the catalog default.
+- Prices and holidays are not refreshed while the application runs; restart DSH to read them again.
+- Models served by providers other than DeepSeek's own show no price; a model missing from the official table gets a note instead.
+- Signed out of the DSH account, the card shows the Open Platform balance rather than a blank.
+- Without a web server, prices and holidays come from the built-in snapshot; without the current session's model selection, the card prices the default model.
 
 ## Development
 
-No build step: `client.js` is a hand-written browser module, `index.js` and `parse.js` are the Host half. The card renders only its own subtree and resolves every colour from its own `--dbc-*` layer, so it follows the app's light/dark setting without reading a host variable.
+There is no build step and no npm runtime dependency. `client.js` is the client module; `index.js` and `parse.js` run on the Host side.
 
-```
-package.json        # dsh.bundle.patch + dsh.client
-cordis.patch.yml    # inserts the dsh-billing-card entry
-index.js parse.js   # Host half: startup fetch + the data route
-client.js           # Client half: the card and its built-in fallbacks
-locale/             # zh/en dictionaries for the plugin manager
-icon.svg            # plugin icon
-CHANGELOG.md        # release notes, English and Chinese, newest first
-CHANGELOG.zh-CN.md
-docs/               # README icon, banners, screenshots and the design audit (repo only, not shipped)
-test/               # offline suite: parsers, host route, client render
-AGENTS.md           # working spec for agents on this repo (repository only, not shipped)
-.agents/skills/     # project skills for agents on this repo (repository only, not shipped)
-.github/workflows/  # ci (tests) and publish (npm with provenance)
+Run the tests:
+
+```bash
+npm test
 ```
 
-To run a local checkout instead of the published package, add the folder — it is linked into the profile, so `client.js` edits show up on a page refresh:
+The offline suite uses local fixtures and a simulated runtime; no network access is required.
+
+To install a local checkout:
 
 ```bash
 dsh plugin --profile web add /path/to/dsh-billing-card
 ```
 
-`npm test` runs the offline suite: the parsers against the pages captured in `test/fixtures`, the Host route with a stubbed upstream, and the Client half in a miniature React runtime. No dependencies, no network. `AGENTS.md` holds the working spec, and `.agents/skills/` holds the four project skills for agents.
+Refresh the page to see client-side changes; restart DSH after changing Host-side code.
 
-Released under the [MIT license](LICENSE).
+Development conventions are documented in `AGENTS.md`, with project-specific skills in `.agents/skills/`.
+
+## License
+
+[MIT](LICENSE)

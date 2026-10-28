@@ -1,119 +1,118 @@
 ---
 name: dsh-plugin-development
-description: Build, modify, install, and debug this DSH sidebar plugin — its Host half (index.js, parse.js), its Client half (client.js), and its packaging. Use for any change to the card's behaviour, text, styling, data sources, or installation.
-whenToUse: Use when editing client.js, index.js, parse.js, package.json, cordis.patch.yml, or locale/*.json in this repository, or when the task is to install, enable, disable, or debug the plugin in a running DSH app.
+description: Change this DSH sidebar plugin's Host half (index.js, parse.js), its Client half (client.js) or its packaging, and get the change live. Covers the loopback route, service injection, refresh and retry mechanics, install, and debugging.
+whenToUse: Editing index.js, parse.js, client.js, cordis.patch.yml or locale/*.json; adding or replacing a data source; a card that shows nothing, a price that looks stale, or a 404 on the data route; installing or enabling the plugin in a DSH profile.
 ---
 
 # DSH plugin development
 
-## When to use
+The card is two halves that deploy differently, and that split decides what you may claim: `client.js` lands on a page
+refresh, `index.js` / `parse.js` need the app restarted. This skill owns the wiring — route, services, refresh,
+install, debug. Visual values belong to `dsh-card-design`; the invariants and compatibility guards belong to
+`AGENTS.md`.
 
-Any change to the card itself: the balance line, the holiday banner, the 调休 chip, the price
-table, the billing-period countdown, tooltips, styling, wording, the Host route and its fetches,
-the parsers, or the package manifest. Also use when installing or debugging the plugin inside a
-running DSH profile.
+## Before you start
 
-## Triggers
-
-- "Add / change / fix something on the card" (visual or textual).
-- A new data source, or a refreshed upstream page/calendar format.
-- A slot, mount point, or DOM question about the sidebar footer.
-- "Install it", "why is nothing showing", "the card still shows the old price".
-
-## Preconditions
-
-1. Read `AGENTS.md` first — it holds the invariants (no invented money or calendar data, no FX
-   conversion, fixed billing windows, exact decimal-string money math, per-source fallback,
-   degrade-not-crash).
-2. Read the `How it works` and `Limits` sections of `README.md` (or `README.zh-CN.md`).
-3. Decide **which half** you are touching. That single decision determines the deploy path and
-   the verification you can honestly claim:
-
-   | Change | Half | Takes effect |
-   | --- | --- | --- |
-   | `client.js` | Client | page refresh |
-   | `index.js`, `parse.js` | Host | full app restart |
-   | `package.json`, `cordis.patch.yml` | manifest | re-add the bundle **and** restart |
-
-4. `npm test` on a clean tree, so a later failure is yours.
+- Read **Invariants** and **Layout and compatibility guards** in `AGENTS.md`, plus **Billing and pricing**,
+  **Balance and data sources** and **Limitations** in `README.md` (or `README.zh-CN.md`).
+- Run the gate in `AGENTS.md` → **Working rules** on the untouched tree, so a later failure is yours.
+- Name the half you are changing: **Architecture** in `AGENTS.md` says what each one needs to go live.
 
 ## Steps
 
-1. Change one behaviour at a time. Keep Host logic out of `client.js` and rendering out of
-   `parse.js`.
-2. Client half only:
+1. One behaviour at a time. Host logic stays out of `client.js`; rendering stays out of `parse.js`.
+2. Client half:
    - `require('react')` is the only import; build with `createElement`, never JSX.
-   - Use services already injected by `dsh.client.inject`: `slots`, `locale`, `timer`, `remote`
-     (`remote.account`, `remote.session`), plus optional `ctx.get('uiSession')` and
-     `ctx.get('modelDirectories')`. Confirm a service exists before using it — do not invent one.
-   - Every visible string goes into **both** dictionaries in `client.js` (`//#region
-     dictionaries`) under the same key. `locale/zh.json` and `locale/en.json` carry plugin `meta`
-     only.
-   - Declare the palette on the plugin's own root with `light-dark(...)` (this repo: `--dbc-*` on
-     `.dbc-root`) and read only those tokens; the app's `color-scheme` on `<html>` is what resolves
-     them, so no host variable is needed. Never restyle host or sibling plugin DOM, and never
-     hardcode a hex outside the token block.
-   - Money and date rendering must reuse the existing formatters (`numberFormatter`,
-     `priceFormatter`, `truncate`) — no per-site `toFixed`.
-3. Host half only:
-   - Fetch upstream data once per process, behind `AbortSignal.timeout(FETCH_TIMEOUT_MS)`;
-     never fetch on the route.
-   - Register the route through nested `ctx.inject(['webServer'], …)` inside `ctx.effect`. Never
-     add `webServer` to `dsh.client.inject`, never register at plugin top level.
-   - Keep `DATA_PATH = '/deepseek-billing-card/data'` (frozen across the rename).
-   - The handler must stay non-async and answer from in-memory state only (405 + `allow` for
-     non-GET/HEAD, 200 + `cache-control: no-store` JSON otherwise).
-4. Parser work: `parse.js` stays pure — no `fetch`, no `fs`, no globals. Add the shape you need
-   to the returned object; never make the Client re-parse raw upstream text.
-5. Gate every change before claiming anything:
-   ```bash
-   node --check index.js && node --check parse.js && node --check client.js && npm test
-   ```
-6. Live check (Client half): the GUI URL and module rev come from the running app.
-   ```bash
-   curl -s <gui>/plugins/events --max-time 3 | grep -o 'rev=[0-9a-f]*' | sort -u
-   ```
-   A changed `rev` plus the new string in the served bytes is the evidence that the Client half
-   landed. `/deepseek-billing-card/data` answering `200` is the evidence for the Host half.
+   - Take services from the `inject` array `client.js` exports: `slots`, `locale`, `timer`, `remote` (the event bus,
+     plus `remote.account` and `remote.session`); `ctx.get('uiSession')` and `ctx.get('modelDirectories')` are
+     optional. Confirm a service exists before using it — do not invent one.
+   - Every visible string goes into **both** dictionaries in `client.js` (`//#region dictionaries`) under the same
+     key.
+   - Reuse the existing formatters — `numberFormatter`, `priceFormatter`, `truncateCents` — instead of a per-site
+     `toFixed`. Tokens come from `dsh-card-design` → **Token layer**.
+3. Host half:
+   - Snapshot the price tables and the calendar once per process, behind `AbortSignal.timeout(FETCH_TIMEOUT_MS)`; the
+     open-platform balance is the one upstream that re-reads on a timer (**Route and refresh mechanics**). Never fetch
+     on the route.
+   - Register through a nested `ctx.inject(['webServer'], (http) => http.effect(…))`. Never add `webServer` to
+     `dsh.client.inject` and never register at plugin top level: a deployment with no web server must still load the
+     card.
+   - The handler is not `async` and answers from memory only: `405` + `allow: GET, HEAD` for any other method,
+     otherwise `200` + `cache-control: no-store`.
+4. Parser work: `parse.js` stays pure — no `fetch`, no `fs`, no globals. Return the shape the Client needs; never make
+   the Client re-parse raw upstream text.
+
+## Live check
+
+The GUI URL and the module `rev` come from the running app:
+
+```bash
+curl -s <gui>/plugins/events --max-time 3 | grep -o 'rev=[0-9a-f]*' | sort -u
+```
+
+A changed `rev` plus the new string in the served bytes is the evidence that a Client change landed;
+`/deepseek-billing-card/data` answering `200` is the evidence for the Host half.
+
+## Route and refresh mechanics
+
+Constants below are code facts: change the code and this section together, so nobody has to re-derive a budget by
+reading `index.js` and `client.js` side by side.
+
+- **Host** (`index.js`): the balance re-reads every `BALANCE_REFRESH_MS = 30 s`, unref'd so it cannot hold the process
+  open. Nothing sits on the request path.
+- **Client budget** (`client.js`): on mount the Client asks the route and retries while the payload is loading or has
+  failed — `DATA_POLL_MS = 3 s`, at most `DATA_POLL_LIMIT = 10` attempts while loading, `DATA_FAIL_LIMIT = 3` while
+  failing. That budget is the only defence against a Host that registers its route late; never turn it into an
+  unbounded fast poll.
+- **Steady state**: `DATA_REFRESH_MS = 30 s` calls `api.current.refreshRoute`, matching the Host's cadence. Without
+  that re-read a card loaded before a key was configured froze on 「未配置 API Key」 forever.
+- **A provider switch asks at once, for a fresh amount**: `refreshRoute(true)` appends `?balance=refresh`; the Host
+  begins a read before answering but still answers from memory — at most one read per `BALANCE_ASK_GAP_MS = 3 s`,
+  one in flight. Not ready yet, and the Client follows up `BALANCE_ASK_LIMIT = 2` times at `BALANCE_ASK_MS = 1 s`.
+- **Two triggers**, both required: a change of the session's selection store (`watchSelection`) and any
+  provider-surface event (`watchUpstream`: `llm/adapters-updated`, `settings/document-updated`,
+  `credentials/record-updated`, `credentials/reference-updated`). Adding a provider or pasting a key changes which
+  balance pays without touching the selection. The periodic tick asks the plain route — a read, not a refresh.
+
+## Install and enable
+
+```bash
+dsh plugin --profile <name> add @jimmyzm/dsh-billing-card@<version>
+```
+
+`dsh plugin` forwards its arguments to pnpm inside the profile directory, so `add`, `remove` and `why` behave as they
+do there. A profile is initialised on first use.
+
+Then restart the app: the Host half is cached per process, so a page refresh alone keeps serving the old route. After
+the restart, `/deepseek-billing-card/data` answering `200` plus a changed module `rev` prove both halves are the ones
+on disk. Proving a *published* artifact is `release-verification`'s job; this section only gets the plugin into a
+profile.
 
 ## Verification
 
-- `npm test` prints one `PASS`/`FAIL` line per assertion: zero `FAIL`, and the total is not
-  lower than before your change.
-- `npm pack --dry-run` lists exactly the runtime files (`index.js`, `parse.js`, `client.js`,
-  `cordis.patch.yml`, `locale/*.json`, `icon.svg`, both READMEs, `LICENSE`) — no `docs/`,
-  `test/`, `.agents/`, `AGENTS.md`, `.github/`, `.DS_Store`.
-- For any visual or layout change, render it offline and read the DOM text (not only the
-  screenshot): the current model may not be able to open images, so assert the markup instead —
-  element classes, text content, and the tooltip string. The bubble is the card's own element
-  (`.dbc-tip*`), not the host primitive, so its markup is in the tree like any other node.
-- Bilingual changes: assert both locales, and assert that the two key sets are identical (the
-  suite already checks this).
-- State plainly what is live and what is waiting for a restart. Never say "it works now" for a
-  Host-half change.
+- Gate green (`AGENTS.md` → **Working rules**): zero `FAIL`, count not lower than before.
+- A bilingual change asserts both locales **and** that the two key sets are identical.
+- A visual change is not verified by a screenshot alone: render it offline and assert the markup — element classes,
+  text content, the bubble string. The reviewer may not be able to open images.
+- Say what is live and what waits for a restart.
 
 ## Failure handling
 
-- Card missing, slot not registering: check the slot id and `order` in `client.js` against the
-  live tree (`cordis_inspect_query`, platform `client`, Slot inspector) instead of guessing DOM.
-- Prices or holidays look stale or wrong: read the tooltips — they say `启动时校准` versus
-  `内置快照`, and `iCloud` versus the built-in table. A snapshot label means the Host route did
-  not answer, which normally means no restart happened yet.
-- `/deepseek-billing-card/data` returns 404: the running Host is older than the code on disk.
-  Restart the app; do not "fix" it by changing the Client retry budget.
-- A test that fails only offline: reproduce with the smallest fixture; never edit
-  `test/fixtures/*` to make it pass.
-- Parser returns `null` on a real page: dump the table rows (see `test/parsers.test.mjs`) and
-  match on row labels, never on cell index.
+- Card missing, slot not registering: check the slot id and `order` against the live tree (`cordis_inspect_query`,
+  platform `client`, Slot inspector) instead of guessing at DOM.
+- Prices or holidays look stale: read the bubbles — they say `启动时校准` versus `内置快照`, and `iCloud` versus the
+  built-in table. A snapshot label means the route did not answer, which normally means no restart.
+- `/deepseek-billing-card/data` returns 404: the running Host is older than the code on disk. Restart; do not "fix" it
+  by changing the Client retry budget.
+- Parser returns `null` on a real page: dump the rows (`test/parsers.test.mjs`) and match on row labels, never on cell
+  index.
+- A test that fails only offline: reproduce with the smallest fixture; never edit `test/fixtures/*` to make it pass.
 
-## Prohibited
+## Not allowed in this half
 
-- Inventing, estimating, or converting any price, balance, or holiday date.
-- Renaming `DATA_PATH`, or changing the peak/idle windows, without an explicit request.
-- Adding `webServer` to `dsh.client.inject`; registering the route at plugin top level.
-- Adding a build step, a bundler, a new npm dependency, or a second `fetch` path around an
-  upstream.
-- Hand-editing the profile's `package.json` or `cordis.patch.yml`; `plugin_manager` actions
-  without the user's approval.
-- Editing `client.js` and then describing a Host-half restart as done (or the reverse).
-- Restyling anything outside the card, or using colours that are not theme tokens.
+`AGENTS.md` already forbids inventing or converting data, renaming `DATA_PATH`, moving the billing windows and adding
+a dependency. What it does not say, and this half must not do:
+
+- Hand-edit a profile's `package.json` or `cordis.patch.yml`, or run `plugin_manager` actions without approval.
+- Add a second `fetch` path around an upstream, or any fetch on the request path.
+- Add a build step or a bundler.

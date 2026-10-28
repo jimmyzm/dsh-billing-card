@@ -1243,10 +1243,11 @@ window.__ModuleLoader__.load({
           top = tipAnchor.bottom + TIP_GAP_PX;
           below = true;
         }
-        // The diamond is 9 px wide, so its apex sits 4.5 px into its own box. When the
-        // trigger's centre is so close to the viewport edge that the bubble had to be
-        // pushed away, the apex can no longer reach the word; a pointer that lands
-        // beside its anchor is worse than no pointer, so it is dropped instead.
+        // The diamond is 8 px wide (`.dbc-tip-arrow`), so its apex sits TIP_ARROW_APEX_PX
+        // (4 px) into its own box. When the trigger's centre is so close to the viewport
+        // edge that the bubble had to be pushed away, the apex can no longer reach the
+        // word; a pointer that lands beside its anchor is worse than no pointer, so it is
+        // dropped instead.
         const reach = width - TIP_ARROW_EDGE_PX - TIP_ARROW_APEX_PX;
         const rawArrow = centre - left - TIP_ARROW_APEX_PX;
         const pointed = rawArrow >= -TIP_ARROW_APEX_PX + TIP_ARROW_EDGE_PX - TIP_ARROW_APEX_PX && rawArrow <= reach;
