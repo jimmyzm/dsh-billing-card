@@ -94,9 +94,11 @@ Every task, every file. Breaking one is a bug, not a design choice.
 - **Keep `README.md` (English, default) and `README.zh-CN.md` in step**: same sections, same facts, cross-linked.
   Every release updates `CHANGELOG.md` and `CHANGELOG.zh-CN.md` together, newest first.
 - **A release's notes and its two changelog sections describe one release.** They agree on the version, on which
-  features, fixes, compatibility changes and limits shipped, and on what upgrading costs — not on wording, order or
-  count. The notes may merge entries, reword them or cut detail; they may not drop a key change or claim one the
-  changelogs and the commit range do not support. `release-verification` → **step 6** owns the check.
+  features, fixes, compatibility changes and limits shipped, and on what upgrading costs — not on wording, entry
+  order or count. The notes may merge entries, reword them or cut detail; they may not drop a key change or claim
+  one the changelogs do not record. A change that shipped without an entry is a gap in both changelogs, filled
+  there first — a commit is proof it happened, not a substitute for the record. `release-verification` → **step 6**
+  owns the check.
 - **Commit messages** are Conventional Commits with no scope: `feat:` `fix:` `docs:` `test:` `ci:` `chore:`
   `refactor:`, then a lowercase imperative summary of one purpose, 72 characters at most —
   `fix: keep the card mounted when the sidebar collapses`. Two purposes are two commits, however small the diff.

@@ -99,12 +99,23 @@ and a script that counts bullets cannot tell you that two texts agree.
    node .agents/skills/release-verification/reconcile-notes.mjs --tag "$tag" --notes "$notes"
    ```
 
-   It prints the headings it found, an inventory of both changelog sections and both notes blocks with stable ids
-   (`zh#1…`, `en#1…`, `zh-n#1…`), and `PASS` / `FAIL` / `REVIEW` for what a machine can decide: the version heading
-   exists once in both files, both headings carry the same date, the body is not empty, it splits into one Chinese
-   and one English block **in either order** (a `---` inside a fenced snippet does not split it), and every pinned
-   install command names this version. Exit `0` means those checks passed; the script prints that this is not
-   agreement between the texts, and it never decrees one.
+   It prints the paths it resolved, the headings it found, an inventory of both changelog sections and both notes
+   blocks with stable ids (`zh#1…`, `en#1…`, `zh-n#1…`), and `PASS` / `FAIL` / `REVIEW` for what a machine can
+   decide: a version heading exists once in each changelog, both headings carry the same date, the body is not
+   empty, it splits into a Chinese block, a `---` rule and an English block **in that order** — Chinese first, as
+   step 5 requires — and every pinned install command names this version. A `---` inside a fenced snippet splits
+   nothing, and a `~~~` fence hides its contents as reliably as a backtick one. The ids are for the table, not for
+   a verdict: exit `0` means the mechanical checks passed, and the script prints that much itself.
+
+   `--root` is the repository that holds both changelogs (default: the current directory). `--notes` is the notes
+   file, or `-` for stdin, and a relative path resolves against the **current directory**, never against `--root`.
+   From the repo root neither flag is needed; from anywhere else pass both, and read the first two lines of the
+   output — they are the resolved paths, so a wrong file shows up before any verdict.
+
+   The script's own cases are offline and re-runnable:
+   `node .agents/skills/release-verification/test-reconcile-notes.mjs` — language order, both fence characters, a
+   missing changelog, a missing notes path, a duplicated heading, `@latest`. Rerun them after editing the script;
+   an audit is only as good as its cases.
 
    The rest is reading. One row per changelog entry, one table per language:
 
@@ -121,9 +132,11 @@ and a script that counts bullets cannot tell you that two texts agree.
    - Every id in the inventory lands in exactly one row. A row you cannot decide is `UNVERIFIED` — not "probably
      fine", and never counted as covered.
 
-   Then turn it around: every notes bullet traces to a changelog entry or to a commit in
-   `git log <previous-tag>..<tag>`. A bullet about something that shipped earlier, or about something no entry and
-   no commit supports, is a release-note bug: drop the claim, or add the changelog entry if the change is real.
+   Then turn it around: every notes bullet has to be supported by an entry in **this version of both changelogs**.
+   The commits in `git log <previous-tag>..<tag>` are evidence that those entries are true — never a substitute for
+   one. A change that shipped without a changelog entry is a gap in the changelogs: write it into `CHANGELOG.md`
+   and `CHANGELOG.zh-CN.md` first, re-run this step, and only then let the notes mention it. A bullet about
+   something from an earlier release, or about something no entry records, comes out of the notes.
 
    Last, the two changelogs against each other: pair the entries (`zh#1 ↔ en#1` …) and confirm each version records
    the same set of changes. They are two editions of one record, so a one-sided entry is a changelog bug, not a
@@ -133,7 +146,8 @@ and a script that counts bullets cannot tell you that two texts agree.
 
    - `中文 CHANGELOG` — the section exists, its entries are changes in this range, and none of the range is missing.
    - `英文 CHANGELOG` — the same, and it lists the same set as the Chinese file.
-   - `Release Notes` — every key change appears in both languages, and no line lacks a source.
+   - `Release Notes` — every key change appears in both languages, and no line goes beyond what the changelogs
+     record.
 
    Two `PASS` and one `UNVERIFIED` is not a pass. The release ships on three `PASS`, with the omission rows stated
    and their reasons.
@@ -233,7 +247,8 @@ integrity, the run URL and conclusion, the install result and the route status.
 The documents get three verdicts of their own — `中文 CHANGELOG`, `英文 CHANGELOG`, `Release Notes` — each `PASS`,
 `FAIL` or `UNVERIFIED`, with the two mapping tables, every omission and its reason, and every row still unresolved.
 The mechanical run is quoted with its exit code and labelled mechanical: `AUTOMATED: PASS` is never reported as "the
-notes match the changelogs", because nothing has compared them.
+notes match the changelogs", because nothing has compared them. If the script or its cases changed in this release,
+their exit code goes into the report too, and no `PASS` is reported from a run that skipped them.
 
 ## Failure handling
 
@@ -252,11 +267,15 @@ notes match the changelogs", because nothing has compared them.
 - `reconcile-notes.mjs` exits `2`: read the `FAIL` lines — a version heading missing from a changelog, two headings
   dated differently, a body that does not split into Chinese and English, an install command pinning another version
   or `@latest`. Fix the document, never the script.
+- `FAIL notes layout … English comes first`: the body is Chinese, a `---` rule, English. Move the blocks; the rule
+  is not the script's to relax.
+- `cannot read …/CHANGELOG.zh-CN.md` or `cannot read notes …`: `--root` or `--notes` resolved somewhere else. The
+  first two output lines print both paths, and a relative `--notes` is anchored at the current directory.
 - A changelog entry the notes drop and that is not plainly non-key: add the bullet, or record the omission and the
   reason. Silence is neither, and "it is in the changelog" is not an argument — a reader of the release page never
   opens it.
-- A notes bullet with no changelog entry and no commit behind it claims something that did not ship: drop it, or add
-  the changelog entry if the change is real.
+- A notes bullet with no changelog entry behind it: the changelogs are incomplete, not the notes. Add the entry to
+  both files — a commit proves the change is real, it does not excuse the missing entry — then re-run step 6.
 - Counts that differ while the mapping is complete are legal — one bullet can carry three entries. The mapping
   decides, not the number.
 - The published body differs from the reviewed file: the release was edited after step 6, so the verdicts describe

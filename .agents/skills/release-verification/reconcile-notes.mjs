@@ -6,19 +6,26 @@
 // It never decides that two texts say the same thing: equal counts and matching words are not
 // agreement, so the semantic mapping stays a manual step in SKILL.md.
 //
+// Paths:
+//   --root   the repository root holding both changelogs (default: the current directory)
+//   --notes  the notes file, or `-` for stdin. A relative path resolves against the current
+//            directory, never against --root, so one command means one file wherever it is run.
+// Both are printed as absolute paths before any verdict.
+//
 // Usage:
 //   node .agents/skills/release-verification/reconcile-notes.mjs --tag v1.3.0 --notes <file|->
 //
 // Exit: 0 = no mechanical failure (semantic review still required), 2 = mechanical failure.
 
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const ZH = 'CHANGELOG.zh-CN.md';
 const EN = 'CHANGELOG.md';
 const CJK = /[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]/u;
 const SECTION_EMOJI = /(✨|🐛|🧩|⬆)/u;
 const KNOWN_SECTION = /(新进展|已修复|兼容性|升级|what'?s new|added|fixed|changed|compatibility|upgrade)/i;
+const RULE = /^\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$/;
 
 function usage() {
   console.error('usage: reconcile-notes.mjs --tag <vX.Y.Z> --notes <file|-> [--root <dir>]');
@@ -43,12 +50,30 @@ if (!opt.tag || !opt.notes) { usage(); process.exit(2); }
 if (!/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(opt.tag)) die(`tag is neither v<version> nor <version>: ${opt.tag}`);
 
 const version = opt.tag.replace(/^v/, '');
+const cwd = process.cwd();
+const rootDir = resolve(cwd, opt.root);
+const notesPath = opt.notes === '-' ? '-' : resolve(cwd, opt.notes);
 const checks = [];
 const check = (verdict, name, detail) => checks.push({ verdict, name, detail });
 
-function readNotes(path) {
-  if (path === '-') return readFileSync(0, 'utf8');
-  return readFileSync(path, 'utf8');
+// One fence tokenizer for every reader below. Blocks of fenced text are masked out before
+// entries, headings or prose are read, so a `- item` inside a snippet is never an entry and a
+// `---` inside one never splits a language. `~~~` and ``` close on their own character.
+function fenceMask(lines) {
+  const mask = [];
+  let open = null;
+  for (const line of lines) {
+    const m = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
+    if (open === null) {
+      if (m) { open = m[1][0]; mask.push(true); continue; }
+      mask.push(false);
+    } else if (m && m[1][0] === open && m[2].trim() === '') {
+      open = null; mask.push(true);
+    } else {
+      mask.push(true);
+    }
+  }
+  return mask;
 }
 
 // `## 1.3.0`, `## 1.3.0 — 2026-10-28`, `## [1.3.0] - 2026-10-28`, `## v1.3.0`. The trailing
@@ -68,43 +93,27 @@ function versionSection(text, ver) {
   for (let i = start + 1; i < lines.length; i++) {
     if (/^##\s/.test(lines[i])) { end = i; break; }
   }
-  return { heading: lines[start], line: start + 1, lines: lines.slice(start + 1, end), alsoAt: hits.slice(1).map((i) => i + 1) };
+  return {
+    heading: lines[start],
+    line: start + 1,
+    lines: lines.slice(start + 1, end),
+    alsoAt: hits.slice(1).map((i) => i + 1),
+  };
 }
 
-function inventory(idPrefix, lines, level = 3) {
-  const subs = [];
-  let cur = null;
-  let inFence = false;
-  const heading = new RegExp(`^#{${level}}\\s+(.*\\S)\\s*$`);
-  for (const line of lines) {
-    if (/^\s*```/.test(line)) { inFence = !inFence; continue; }
-    if (inFence) continue;
-    const h = line.match(heading);
-    if (h) { cur = { title: h[1], entries: [] }; subs.push(cur); continue; }
-    const b = line.match(/^\s{0,2}[-*]\s+(.*\S)\s*$/);
-    if (!b) continue;
-    if (!cur) { cur = { title: '(no subsection)', entries: [] }; subs.push(cur); }
-    cur.entries.push({ id: `${idPrefix}#${subs.reduce((n, s) => n + s.entries.length, 0) + 1}`, text: b[1] });
-  }
-  const count = subs.reduce((n, s) => n + s.entries.length, 0);
-  return { subs, count, level };
-}
-
-// Blocks are separated by a horizontal rule outside a code fence, so a `---` inside a snippet
-// cannot split a language by accident. Order is not assumed: the language of a block is decided
-// from its characters, and a block that is neither clearly Chinese nor clearly English stays
-// unassigned.
-function blocks(text) {
+// Blocks are separated by a horizontal rule outside a fence, so a `---` inside a snippet cannot
+// split a language by accident. The language of a block is decided from its characters, never
+// from its position; the order is checked separately.
+function splitBlocks(lines, mask) {
   const out = [];
-  let cur = [];
-  let inFence = false;
-  for (const line of text.split('\n')) {
-    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
-    if (!inFence && /^\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { out.push(cur); cur = []; continue; }
-    cur.push(line);
+  let cur = { lines: [], mask: [] };
+  for (let i = 0; i < lines.length; i++) {
+    if (!mask[i] && RULE.test(lines[i])) { out.push(cur); cur = { lines: [], mask: [] }; continue; }
+    cur.lines.push(lines[i]);
+    cur.mask.push(mask[i]);
   }
   out.push(cur);
-  return out.filter((b) => b.join('').trim() !== '');
+  return out.filter((b) => b.lines.join('').trim() !== '');
 }
 
 function language(block) {
@@ -112,11 +121,9 @@ function language(block) {
   // carries one long install command would otherwise count as mostly Latin.
   let cjk = 0;
   let ascii = 0;
-  let inFence = false;
-  for (const line of block) {
-    if (/^\s*(```|~~~)/.test(line)) { inFence = !inFence; continue; }
-    if (inFence) continue;
-    for (const ch of line) {
+  for (let i = 0; i < block.lines.length; i++) {
+    if (block.mask[i]) continue;
+    for (const ch of block.lines[i]) {
       if (CJK.test(ch)) cjk++;
       else if (/[A-Za-z]/.test(ch)) ascii++;
     }
@@ -126,18 +133,42 @@ function language(block) {
   return { label, ratio, cjk, ascii };
 }
 
+// Entries are top-level bullets only. An indented bullet is a detail of its parent: it gets no id,
+// because the mapping table has one row per change, and a nested line would silently double it.
+function inventory(idPrefix, block, level) {
+  const subs = [];
+  let cur = null;
+  let nested = 0;
+  const heading = new RegExp(`^#{${level}}\\s+(.*\\S)\\s*$`);
+  for (let i = 0; i < block.lines.length; i++) {
+    if (block.mask[i]) continue;
+    const line = block.lines[i];
+    const h = line.match(heading);
+    if (h) { cur = { title: h[1], entries: [] }; subs.push(cur); continue; }
+    if (/^[ \t]{2,}[-*]\s+\S/.test(line)) { nested++; continue; }
+    const b = line.match(/^[ \t]{0,1}[-*]\s+(.*\S)\s*$/);
+    if (!b) continue;
+    if (!cur) { cur = { title: '(no subsection)', entries: [] }; subs.push(cur); }
+    cur.entries.push({ id: `${idPrefix}#${subs.reduce((n, s) => n + s.entries.length, 0) + 1}`, text: b[1] });
+  }
+  const count = subs.reduce((n, s) => n + s.entries.length, 0);
+  return { subs, count, level, nested };
+}
+
 function sections(block) {
   const found = [];
-  for (const line of block) {
-    const h = line.match(/^##\s+(.*\S)\s*$/);
+  for (let i = 0; i < block.lines.length; i++) {
+    if (block.mask[i]) continue;
+    const h = block.lines[i].match(/^##\s+(.*\S)\s*$/);
     if (h) found.push(h[1]);
   }
   return found;
 }
 
+// Fenced lines are read here on purpose: the install command lives in one.
 function pinned(block) {
   const pins = [];
-  for (const line of block) {
+  for (const line of block.lines) {
     for (const m of line.matchAll(/@jimmyzm\/dsh-billing-card@([0-9A-Za-z.\-]+)/g)) pins.push(m[1]);
   }
   return pins;
@@ -148,18 +179,30 @@ function date(heading) {
   return m ? m[1] : null;
 }
 
-// --- mechanical checks ------------------------------------------------------
+function load(file) {
+  try {
+    return { text: readFileSync(file, 'utf8') };
+  } catch (err) {
+    return { error: err.code === 'ENOENT' ? 'no such file' : err.message };
+  }
+}
 
-const zhs = versionSection(readFileSync(join(opt.root, ZH), 'utf8'), version);
-const ens = versionSection(readFileSync(join(opt.root, EN), 'utf8'), version);
+// --- changelogs -------------------------------------------------------------
 
-if (zhs) check('PASS', `${ZH} heading`, `line ${zhs.line}: ${zhs.heading}`);
-else check('FAIL', `${ZH} heading`, `no "## ${version}" section — wrong version, or the entry was never written`);
+const zhFile = join(rootDir, ZH);
+const enFile = join(rootDir, EN);
+const zhRead = load(zhFile);
+const enRead = load(enFile);
+const zhs = zhRead.text ? versionSection(zhRead.text, version) : null;
+const ens = enRead.text ? versionSection(enRead.text, version) : null;
 
-if (ens) check('PASS', `${EN} heading`, `line ${ens.line}: ${ens.heading}`);
-else check('FAIL', `${EN} heading`, `no "## ${version}" section — wrong version, or the entry was never written`);
-
-for (const [file, sec] of [[ZH, zhs], [EN, ens]]) {
+for (const [file, read, sec] of [[ZH, zhRead, zhs], [EN, enRead, ens]]) {
+  if (read.error) {
+    check('FAIL', `${file}`, `cannot read ${join(rootDir, file)} (${read.error}) — --root resolves to ${rootDir}`);
+    continue;
+  }
+  if (sec) check('PASS', `${file} heading`, `line ${sec.line}: ${sec.heading}`);
+  else check('FAIL', `${file} heading`, `no "## ${version}" section — wrong version, or the entry was never written`);
   if (sec?.alsoAt.length) {
     check('FAIL', `${file} heading`, `the same version is also at line ${sec.alsoAt.join(', ')} — one version, one section`);
   }
@@ -172,35 +215,51 @@ if (zhs && ens) {
   else check('FAIL', 'release date', `${ZH} says ${dz}, ${EN} says ${de}`);
 }
 
-let body = '';
-try { body = readNotes(opt.notes); } catch (err) { die(`cannot read notes: ${err.message}`); }
-const bodyBytes = Buffer.byteLength(body);
-if (body.trim() === '') check('FAIL', 'notes', `${opt.notes} is empty`);
-else check('PASS', 'notes', `${opt.notes}, ${bodyBytes} bytes`);
+const zhBlock = zhs ? { lines: zhs.lines, mask: fenceMask(zhs.lines) } : null;
+const enBlock = ens ? { lines: ens.lines, mask: fenceMask(ens.lines) } : null;
+const zhInv = zhBlock ? inventory('zh', zhBlock, 3) : null;
+const enInv = enBlock ? inventory('en', enBlock, 3) : null;
 
-const bl = blocks(body);
+for (const [file, inv] of [[ZH, zhInv], [EN, enInv]]) {
+  if (inv && inv.count === 0) check('REVIEW', `${file} section`, 'the version section has no bullets — confirm the release really changed nothing');
+}
+
+// --- notes ------------------------------------------------------------------
+
+let body;
+try { body = opt.notes === '-' ? readFileSync(0, 'utf8') : readFileSync(notesPath, 'utf8'); }
+catch (err) { die(`cannot read notes ${notesPath} (${err.message})`); }
+
+if (body.trim() === '') check('FAIL', 'notes', `${notesPath} is empty`);
+else check('PASS', 'notes', `${notesPath}, ${Buffer.byteLength(body)} bytes`);
+
+const noteLines = body.split('\n');
+const bl = splitBlocks(noteLines, fenceMask(noteLines));
 const langs = bl.map(language);
-const zhBlocks = langs.map((l, i) => (l.label === 'zh' ? i : -1)).filter((i) => i >= 0);
-const enBlocks = langs.map((l, i) => (l.label === 'en' ? i : -1)).filter((i) => i >= 0);
+const zhAt = langs.map((l, i) => (l.label === 'zh' ? i : -1)).filter((i) => i >= 0);
+const enAt = langs.map((l, i) => (l.label === 'en' ? i : -1)).filter((i) => i >= 0);
+const shape = langs.map((l, i) => `block ${i + 1} = ${l.label} (CJK ${Math.round(l.ratio * 100)}%)`).join(', ');
 
 if (bl.length === 0) {
   check('FAIL', 'notes layout', 'nothing to split — the body is empty');
-} else if (bl.length === 2 && zhBlocks.length === 1 && enBlocks.length === 1) {
-  const desc = langs.map((l, i) => `block ${i + 1} = ${l.label} (CJK ${Math.round(l.ratio * 100)}%)`).join(', ');
-  check('PASS', 'notes layout', desc);
+} else if (bl.length === 2 && zhAt.length === 1 && enAt.length === 1 && zhAt[0] === 0 && enAt[0] === 1) {
+  check('PASS', 'notes layout', shape);
+} else if (bl.length === 2 && zhAt.length === 1 && enAt.length === 1) {
+  check('FAIL', 'notes layout', `English comes first — the body is Chinese, then a --- rule, then English (${shape})`);
 } else {
-  const shape = langs.map((l, i) => `block ${i + 1}: ${l.label} (CJK ${Math.round(l.ratio * 100)}%, ${l.cjk} CJK / ${l.ascii} latin)`).join('; ');
-  check('FAIL', 'notes layout', `${bl.length} block(s), need one Chinese and one English — ${shape}. Split them by hand; this script will not guess an order`);
+  check('FAIL', 'notes layout', `${bl.length} block(s); need exactly two — Chinese, a --- rule, English — ${shape}`);
 }
+const layoutOk = checks.filter((c) => c.name === 'notes layout').every((c) => c.verdict === 'PASS');
 
-const LANG_INDEX = { zh: zhBlocks[0], en: enBlocks[0] };
+const LANG_BLOCK = { zh: zhAt[0], en: enAt[0] };
 const noteSections = {};
 const noteEntries = {};
 for (const lang of ['zh', 'en']) {
-  const i = LANG_INDEX[lang];
+  const i = LANG_BLOCK[lang];
   if (i === undefined) continue;
   noteSections[lang] = sections(bl[i]);
   noteEntries[lang] = inventory(lang === 'zh' ? 'zh-n' : 'en-n', bl[i], 2);
+  if (!layoutOk) continue;
   const pins = pinned(bl[i]);
   if (pins.length === 0) {
     check('REVIEW', `${lang} upgrade command`, 'no pinned install command found — confirm the section is genuinely absent, not forgotten');
@@ -214,30 +273,35 @@ for (const lang of ['zh', 'en']) {
   const unknown = noteSections[lang].filter((h) => !SECTION_EMOJI.test(h) && !KNOWN_SECTION.test(h));
   if (unknown.length) check('REVIEW', `${lang} section headings`, `unrecognised: ${unknown.map((h) => `"${h}"`).join(', ')} — every line under one needs a verdict by hand`);
   if (noteEntries[lang].count === 0) check('REVIEW', `${lang} entries`, 'no bullets — a release with no change is a version bump, not a release');
+  if (noteEntries[lang].nested) check('REVIEW', `${lang} entries`, `${noteEntries[lang].nested} nested bullet(s) are not entries — map each with its parent`);
 }
 
-// --- inventory --------------------------------------------------------------
+// --- report -----------------------------------------------------------------
 
 const out = [];
-out.push(`release ${opt.tag}  (version ${version})`, '');
+out.push(`release ${opt.tag}  (version ${version})`);
+out.push(`root  ${rootDir}`);
+out.push(`notes ${opt.notes === '-' ? 'stdin' : notesPath}`);
+out.push('');
 
 out.push('MECHANICAL');
-for (const c of checks) out.push(`  ${c.verdict.padEnd(6)} ${c.name.padEnd(28)} ${c.detail}`);
+for (const c of checks) out.push(`  ${c.verdict.padEnd(6)} ${c.name.padEnd(22)} ${c.detail}`);
 out.push('');
 
 function dumpInventory(label, inv) {
-  out.push(`  ${label}  ${inv.subs.length} subsection(s), ${inv.count} entry/entries`);
+  out.push(`  ${label}  ${inv.subs.length} subsection(s), ${inv.count} entry/entries${inv.nested ? `, ${inv.nested} nested` : ''}`);
   for (const s of inv.subs) {
-    out.push(`    ${"#".repeat(inv.level)} ${s.title} (${s.entries.length})`);
+    out.push(`    ${'#'.repeat(inv.level)} ${s.title} (${s.entries.length})`);
     for (const e of s.entries) out.push(`      ${e.id.padEnd(6)} ${e.text}`);
   }
 }
 
 out.push('INVENTORY — counts are not a verdict');
-for (const [file, sec] of [[ZH, zhs], [EN, ens]]) {
-  if (!sec) { out.push(`  ${file}  (no section)`); continue; }
+for (const [file, inv, read] of [[ZH, zhInv, zhRead], [EN, enInv, enRead]]) {
   out.push('');
-  dumpInventory(file, inventory(file === ZH ? 'zh' : 'en', sec.lines));
+  if (read.error) { out.push(`  ${file}  (cannot read ${join(rootDir, file)})`); continue; }
+  if (!inv) { out.push(`  ${file}  (no "## ${version}" section)`); continue; }
+  dumpInventory(file, inv);
 }
 for (const lang of ['zh', 'en']) {
   if (!noteEntries[lang]) continue;
@@ -248,14 +312,15 @@ for (const lang of ['zh', 'en']) {
 }
 out.push('');
 
-// --- what is left to a human -----------------------------------------------
+// --- what is left to a human ------------------------------------------------
 
 const semantic = [];
 if (noteSections.zh?.some((h) => /兼容|compatib/i.test(h)) || noteSections.en?.some((h) => /兼容|compatib/i.test(h))) {
-  semantic.push('compatibility section present — the changelogs have none: confirm every line there traces to a changelog entry or a commit in the range');
+  semantic.push('compatibility section present — the changelogs have none: confirm every line there traces to a changelog entry');
 }
 semantic.push('map every zh entry, every en entry and every notes bullet: covered / merged / omitted with a reason');
-semantic.push('check the reverse: each notes bullet has a source in this version, not in a neighbour');
+semantic.push('every notes bullet needs an entry in this version of BOTH changelogs; the commit range only confirms that entry is true');
+semantic.push('a change that shipped without a changelog entry is a gap in the changelogs — fill both languages first, never cite the commit instead');
 semantic.push('check zh section and en section list the same changes; a one-sided entry is a changelog bug');
 
 out.push('LEFT TO THE SEMANTIC REVIEW (SKILL.md step 6 — this script cannot pass or fail them)');
