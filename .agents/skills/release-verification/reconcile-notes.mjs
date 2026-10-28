@@ -57,17 +57,21 @@ const checks = [];
 const check = (verdict, name, detail) => checks.push({ verdict, name, detail });
 
 // One fence tokenizer for every reader below. Blocks of fenced text are masked out before
-// entries, headings or prose are read, so a `- item` inside a snippet is never an entry and a
-// `---` inside one never splits a language. `~~~` and ``` close on their own character.
+// entries, headings or prose are read, so a `- item` inside a snippet is never an entry, a
+// `## 1.3.0` inside one never becomes a heading, and a `---` inside one never splits a language.
+// A fence closes on the same character, with at least as many of them as opened it, and with
+// nothing but whitespace after: ` ``` ` inside a ` ```` ` block is content, not a closer.
+const FENCE = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
+
 function fenceMask(lines) {
   const mask = [];
   let open = null;
   for (const line of lines) {
-    const m = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
+    const m = line.match(FENCE);
     if (open === null) {
-      if (m) { open = m[1][0]; mask.push(true); continue; }
+      if (m) { open = { char: m[1][0], len: m[1].length }; mask.push(true); continue; }
       mask.push(false);
-    } else if (m && m[1][0] === open && m[2].trim() === '') {
+    } else if (m && m[1][0] === open.char && m[1].length >= open.len && m[2].trim() === '') {
       open = null; mask.push(true);
     } else {
       mask.push(true);
@@ -85,18 +89,24 @@ function headingFor(ver) {
 
 function versionSection(text, ver) {
   const lines = text.split('\n');
+  // The changelog is a document with snippets in it: a fenced `## 1.3.0` is an example, so the
+  // heading search, the duplicate search and the end of the section all read this mask. Missing
+  // it here would make a documented snippet look like a second release and cut a real entry off.
+  const mask = fenceMask(lines);
   const re = headingFor(ver);
-  const hits = lines.map((l, i) => (re.test(l) ? i : -1)).filter((i) => i >= 0);
+  const hits = [];
+  for (let i = 0; i < lines.length; i++) if (!mask[i] && re.test(lines[i])) hits.push(i);
   if (hits.length === 0) return null;
   const start = hits[0];
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
-    if (/^##\s/.test(lines[i])) { end = i; break; }
+    if (!mask[i] && /^##\s/.test(lines[i])) { end = i; break; }
   }
   return {
     heading: lines[start],
     line: start + 1,
     lines: lines.slice(start + 1, end),
+    mask: mask.slice(start + 1, end),
     alsoAt: hits.slice(1).map((i) => i + 1),
   };
 }
@@ -215,8 +225,10 @@ if (zhs && ens) {
   else check('FAIL', 'release date', `${ZH} says ${dz}, ${EN} says ${de}`);
 }
 
-const zhBlock = zhs ? { lines: zhs.lines, mask: fenceMask(zhs.lines) } : null;
-const enBlock = ens ? { lines: ens.lines, mask: fenceMask(ens.lines) } : null;
+// The section carries its own mask, so the fence scan that decided where the section ends is the
+// one the inventory reads — a second scan of the slice could disagree with the first.
+const zhBlock = zhs ? { lines: zhs.lines, mask: zhs.mask } : null;
+const enBlock = ens ? { lines: ens.lines, mask: ens.mask } : null;
 const zhInv = zhBlock ? inventory('zh', zhBlock, 3) : null;
 const enInv = enBlock ? inventory('en', enBlock, 3) : null;
 

@@ -103,9 +103,12 @@ and a script that counts bullets cannot tell you that two texts agree.
    blocks with stable ids (`zh#1…`, `en#1…`, `zh-n#1…`), and `PASS` / `FAIL` / `REVIEW` for what a machine can
    decide: a version heading exists once in each changelog, both headings carry the same date, the body is not
    empty, it splits into a Chinese block, a `---` rule and an English block **in that order** — Chinese first, as
-   step 5 requires — and every pinned install command names this version. A `---` inside a fenced snippet splits
-   nothing, and a `~~~` fence hides its contents as reliably as a backtick one. The ids are for the table, not for
-   a verdict: exit `0` means the mechanical checks passed, and the script prints that much itself.
+   step 5 requires — and every pinned install command names this version. Fences are read the same way by every
+   reader, the changelog heading search included: a `---` inside a snippet splits nothing, a documented `## 1.3.0`
+   inside one is an example rather than a second release or the end of the section, a `~~~` fence hides its contents
+   as reliably as a backtick one, and a fence closes only on its own character with at least as many of them as
+   opened it — a shorter run inside a longer block is content. The ids are for the table, not for a verdict: exit `0`
+   means the mechanical checks passed, and the script prints that much itself.
 
    `--root` is the repository that holds both changelogs (default: the current directory). `--notes` is the notes
    file, or `-` for stdin, and a relative path resolves against the **current directory**, never against `--root`.
@@ -114,6 +117,7 @@ and a script that counts bullets cannot tell you that two texts agree.
 
    The script's own cases are offline and re-runnable:
    `node .agents/skills/release-verification/test-reconcile-notes.mjs` — language order, both fence characters, a
+   fenced heading that must not become a release or truncate a section, a four-backtick block holding three, a
    missing changelog, a missing notes path, a duplicated heading, `@latest`. Rerun them after editing the script;
    an audit is only as good as its cases.
 
