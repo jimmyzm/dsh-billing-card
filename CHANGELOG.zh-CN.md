@@ -2,6 +2,12 @@
 
 `@jimmyzm/dsh-billing-card` 的重要变更。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。英文版见 [CHANGELOG.md](CHANGELOG.md)。
 
+## 未发布
+
+### 调整
+
+- 英文缓存单价标签由 `Cache read` 改为 `Cached`。
+
 ## 1.3.0 — 2026-10-28
 
 ### 新增

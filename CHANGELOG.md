@@ -2,6 +2,12 @@
 
 Notable changes to `@jimmyzm/dsh-billing-card`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The Chinese edition is [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md).
 
+## Unreleased
+
+### Changed
+
+- The English cache-price label is `Cached` (was `Cache read`).
+
 ## 1.3.0 — 2026-10-28
 
 ### Added
