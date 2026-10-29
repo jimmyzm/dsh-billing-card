@@ -53,7 +53,7 @@ dsh plugin --profile web add @jimmyzm/dsh-billing-card@latest
 
 安装或升级后重启 DSH。卡片出现在侧边栏底部；侧边栏收成图标栏时隐藏。
 
-需要 DSH 0.2.0-rc.1 或更新版本，低于 0.3.0，且带有 Web GUI、侧边栏底部插槽，以及账号与模型目录服务。已在 DSH 0.2.1-rc.3 上端到端验证。
+需要 DSH 0.2.0-rc.1 或更新版本，且带有 Web GUI、侧边栏底部插槽，以及账号与模型目录服务。已在 DSH 0.2.1-rc.3 上端到端验证。
 
 卸载：
 

@@ -53,7 +53,7 @@ dsh plugin --profile web add @jimmyzm/dsh-billing-card@latest
 
 Restart DSH after installing or upgrading. The card appears at the bottom of the sidebar and hides when the sidebar collapses to the icon rail.
 
-Requires DSH 0.2.0-rc.1 or later, below 0.3.0, with the Web GUI, the sidebar footer slot, and the account and model-catalogue services. Tested end to end on DSH 0.2.1-rc.3.
+Requires DSH 0.2.0-rc.1 or later, with the Web GUI, the sidebar footer slot, and the account and model-catalogue services. Tested end to end on DSH 0.2.1-rc.3.
 
 To uninstall:
 
