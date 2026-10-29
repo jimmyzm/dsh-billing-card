@@ -73,6 +73,8 @@ Every task, every file. Breaking one is a bug, not a design choice.
   plugin DOM, no iframe, and no new npm dependency without an explicit OK.
 - **`engines.dsh` lists each prerelease line explicitly** (`>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.3.0-0`): a plain
   `>=0.2.0-rc.1` rejects every later prerelease under semver, and this range blocks a DSH build never tested here.
+  The `<0.3.0` ceiling is the constraint every plugin carries, not a fact about this one, so the READMEs describe
+  only the lowest Host that works and leave the ceiling to the manifest a resolver reads.
 - **Every visible string has the same key in both dictionaries** in `client.js` (`//#region dictionaries`).
   `locale/zh.json` and `locale/en.json` carry plugin `meta` only.
 
