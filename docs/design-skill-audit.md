@@ -12,8 +12,14 @@
 > - **历史记录**：第 1–7 节与第 8 节的验证结果是 2026-10 审计当时跑出来的证据。`已确认` 说的是「当时执行过、
 >   看到过」，不是「今天仍然如此」；引用任何一条之前，先重跑它给出的命令。
 > - **当前规范**：只有一个地方——skill 的 **Values**。本文件没有一条数值可以当规范引用。
-> - **未完成事项**：全部在第 6 节（`--dbc-label-quiet` 的去向、对比度数值是否需要重测）。它们至今**没有**关闭：
->   读到「当时记作 4.71:1」不等于「已经查清今天的值是 4.71:1」。
+> - **未完成事项**：全在第 6 节，分三类，至今**都**没有关闭。
+>   **设计实现待确认** —— `--dbc-label-quiet` 的历史去向、对比度数值是否需要重新测量、调休 chip 在浅色主题下的
+>   4.46:1；读到「当时记作 4.71:1」
+>   不等于「已经查清今天的值是 4.71:1」。**来源溯源待确认** —— 两个第三方 skill 的上游提交或版本，以及
+>   `ui-taste` 的获取地址是否对应某个公开仓库；这些只能回到上游去查，本文件给不出结论。
+>   **样式刻度偏离** —— 6.5 节：`CARD_CSS` 有 10 条间距落在 skill 的刻度外（9 条真的产生像素）、一条空转的 `gap`、
+>   232px 中文带调休只剩 7.75px 余量。这一类不是「查不到」，是「量出来了、还没定」。
+>   三类都按「未核实/未决定」记，本文没有任何一条据此标成「已完成」。
 >
 > **2026-10-29 的整理**：这些数值已从 `AGENTS.md` 迁入该 skill，正文里的 `AGENTS.md:NNN` 一律改为章节名
 > （那些行号现在指向别处，`AGENTS.md` 已瘦身到一百多行）。正文里的 `client.js:NNN` 是 2026-10 的快照，请按同一行
@@ -27,7 +33,7 @@
 
 标记约定：
 
-- **已确认** —— 本会话中我亲自执行、抓取或读取得到的证据（命令、文件、行号、提交）。
+- **已确认** —— 审计当时我亲自执行、抓取或读取得到的证据（命令、文件、行号、提交）。
 - **来源待确认** —— 只能确认技能内容与作者声明，无法确认上游的某个具体版本/提交。
 - **推测** —— 不写。凡属推测一律落在第 6 节，等人工补充。
 
@@ -37,16 +43,16 @@
 
 ## 1. 找到的第三方 Skills 及来源
 
-| Skill | 安装方式（用户确认的标准命令） | 本次会话实际执行的命令 | 版本 / 提交 | 许可证 |
+| Skill | 安装方式（用户确认的标准命令） | 审计当时实际执行的命令 | 版本 / 提交 | 许可证 |
 | --- | --- | --- | --- | --- |
-| `refactoring-ui` | `npx skills add https://github.com/s0xdk/refactoring-ui-skill --skill refactoring-ui` | `npx --yes skills use "https://github.com/s0xdk/refactoring-ui-skill" --skill "refactoring-ui"`（`use` 把全文打印到 stdout，存于 `/tmp/skills-refactoring-ui.txt`，279 行） | frontmatter 只有 `name` + `description`，**无版本号** → 提交待确认 | MIT，`Copyright (c) 2026 s13k`（目录内 `LICENSE`） |
-| `ui-taste` | `npx skills add https://uizze.sh/` | `npx skills use "https://uizze.sh/" --skill "ui-taste"`（用户 m04220 指定，输出存于 `/tmp/skills-ui-taste.txt`，87 行） | `MANIFEST.json`：`version "uizze-design-v14"`，`designStack.version 4.6.0`，`commit 8a0e198da34ebc5b936a9d5975fb7a3b1cf353b7`；frontmatter `metadata.version 0.3.0`，author `UIZZE <business@uizze.com>` | Apache-2.0，附 `NOTICE`（声明部分内容改编自 Impeccable） |
-| `banner-design` | `npx skills add https://github.com/nextlevelbuilder/ui-ux-pro-max-skill --skill banner-design` | `npm_config_cache=/tmp/npm-cache npx -y skills add https://github.com/nextlevelbuilder/ui-ux-pro-max-skill --skill banner-design --agent '*' -y --copy`（用户 m07023 指定） | frontmatter：`metadata.author: claudekit`，`metadata.version "1.0.0"`；安装器的 `skills-lock.json` 已删 → 上游提交待确认 | MIT（仅声明，未随附 LICENSE 文本） |
+| `refactoring-ui` | `npx skills add https://github.com/s0xdk/refactoring-ui-skill --skill refactoring-ui` | `npx --yes skills use "https://github.com/s0xdk/refactoring-ui-skill" --skill "refactoring-ui"`（`use` 把全文打印到 stdout；当时重定向到临时文件，279 行，未归档） | frontmatter 只有 `name` + `description`，**无版本号** → 提交待确认 | MIT，`Copyright (c) 2026 s13k`（目录内 `LICENSE`） |
+| `ui-taste` | `npx skills add https://uizze.sh/` | `npx skills use "https://uizze.sh/" --skill "ui-taste"`（用户指定；输出当时重定向到临时文件，87 行，未归档） | `MANIFEST.json`：`version "uizze-design-v14"`，`designStack.version 4.6.0`，`commit 8a0e198da34ebc5b936a9d5975fb7a3b1cf353b7`；frontmatter `metadata.version 0.3.0`，author `UIZZE <business@uizze.com>` | Apache-2.0，附 `NOTICE`（声明部分内容改编自 Impeccable） |
+| `banner-design` | `npx skills add https://github.com/nextlevelbuilder/ui-ux-pro-max-skill --skill banner-design` | `npm_config_cache=/tmp/npm-cache npx -y skills add https://github.com/nextlevelbuilder/ui-ux-pro-max-skill --skill banner-design --agent '*' -y --copy`（用户指定） | frontmatter：`metadata.author: claudekit`，`metadata.version "1.0.0"`；安装器的 `skills-lock.json` 已删 → 上游提交待确认 | MIT（仅声明，未随附 LICENSE 文本） |
 
-三者都以临时目录形式出现过，路径可核：
+前两者的正文是安装器解到系统临时目录后读的（形如 `skills-use-<随机后缀>/<skill 名>/`，未归档，那些路径今天已不可复现）；`banner-design` 则是先 vendor 进仓库再读的。当时看到的构成：
 
-- `/var/folders/j5/yv68ck3j24v02d7n8rzs78mr0000gn/T/skills-use-2ayWrd/refactoring-ui/`（`SKILL.md` `README.md` `LICENSE` `assets/` `references/`）
-- `…/T/skills-use-GiX9SQ/ui-taste/`（`reference/{polish,craft,distill,audit,new-work,operate,overdrive,ios}.md`、`references/`、`MANIFEST.json`、`CHECKSUMS.sha256`、`MODIFICATIONS.md`、`LICENSE`、`NOTICE`）
+- `refactoring-ui/`：`SKILL.md` `README.md` `LICENSE` `assets/` `references/`
+- `ui-taste/`：`reference/{polish,craft,distill,audit,new-work,operate,overdrive,ios}.md`、`references/`、`MANIFEST.json`、`CHECKSUMS.sha256`、`MODIFICATIONS.md`、`LICENSE`、`NOTICE`
 - `banner-design` 曾被 vendor 进仓库（提交 `840a28e`），现按用户要求删除 vendored 副本、只作为第三方来源记录：仓库内只剩 `.agents/skills/{dsh-card-design,dsh-plugin-development,billing-regression-testing,release-verification}` 四个项目自有 skill。
 
 ---
@@ -62,13 +68,13 @@
 
 ### 2.2 `ui-taste`：像素级对比度审计与「先定位漂移类型」
 
-- 读取了 `reference/polish.md` 与 `reference/craft.md`，按其中的**在渲染后的背景上实测对比度**要求，写了 Python WCAG 脚本，从 DSH asar 里解析出宿主 token 的真实色值（`/Applications/DeepSeek Harness.app/Contents/Resources/app.asar`），逐对测量。
-- 量出的结论直接改了实现：chip 的文字用原始状态色在自身浅底上只有 **2.05:1**（浅色主题），于是改为 `color-mix(state 50%, ink)`；三级淡色文字在纯白上 3.71:1，于是把标签色压暗一级（当时记作 `--dbc-label-quiet`，4.71:1）。该 token 名已不在代码里；今天的对应层级见 skill 的 **Contrast**，去向待确认见第 6 节。
+- 读取了 `reference/polish.md` 与 `reference/craft.md`，按其中的**在渲染后的背景上实测对比度**要求，写了 Python WCAG 脚本，从 DSH 安装目录的 `app.asar`（`DeepSeek Harness.app/Contents/Resources/app.asar`）里解析出宿主 token 的真实色值，逐对测量。
+- 量出的结论直接改了实现：chip 的文字用原始状态色在自身浅底上只有 **2.05:1**（浅色主题），于是改为 `color-mix(state 50%, ink)`；三级淡色文字在纯白上 3.71:1，于是把标签色压暗一级（当时记作 `--dbc-label-quiet`，4.71:1）。该 token 名已不在代码里；今天的对应层级见 skill 的 **Contrast**，去向待确认见第 6.2 节。这两处改法只留在本条记录里：`git log -S` 找不到 `color-mix(state …)` 的提交，今天的 chip 是 `--dbc-green` on `--dbc-green-bg`（按 token 色值 4.7:1），2.05 这个数复算不出来。
 - 该 skill 的「漂移分类：缺 token / 一次性取值 / 概念错配 / 局部缺陷，然后在最窄的正确层级修」被沿用为 skill 的 **Steps → Before you change** 第 2 步。
 
 ### 2.3 `banner-design`：确实驱动了 banner 的产出流程
 
-- 尺寸取自其 `references/banner-sizes-and-styles.md` 的 web hero 区间 → 定 `1200×320`；安全区、单一 CTA、≤2 字体、按精确视口截图并核对像素尺寸，都体现在 `/tmp/banners/gen.mjs` 与最终的 `docs/banners/minimal-{zh,en}-1200x320.png`。
+- 尺寸取自其 `references/banner-sizes-and-styles.md` 的 web hero 区间 → 定 `1200×320`；安全区、单一 CTA、≤2 字体、按精确视口截图并核对像素尺寸，都体现在一次性的生成脚本（临时目录，未归档，未随仓库保留）与最终交付的 `docs/banners/minimal-{zh,en}-1200x320.png` 里。
 - 实际交付走完了它的五步：三套方向 → 用户选 A → 文案迭代（去「账单」、谷/峰上色、安装命令改正）→ 精确尺寸导出 → 并排展示。
 
 ---
@@ -123,11 +129,11 @@
 | 倒计时不截断并保留措辞 | `client.js:631-633`；`dsh-card-design` → **Layout** |
 | 气泡自绘、不用宿主 Tooltip | `client.js:645-655`；提交 `5c65d96` |
 | 气泡箭头朝向触发词、顶点居中 | `TIP_ARROW_APEX_PX = 4`（`client.js:83`）、`TIP_ARROW_EDGE_PX = 12`（`client.js:85`）、`.dbc-tip-arrow`（`client.js:654-655`） |
-| 悬停只在标签上、模型行仅官方 provider 可悬停 | `billsAtListPrice`（`client.js:51`）、`OFFICIAL_PROVIDERS`（`client.js:45`）、`AGENTS.md` → **Invariants** 第 6 条 |
+| 金额行、模型行与 chip 各自是触发点；模型行只在官方 provider 下才可悬停（1.2.x 时悬停只在标签上，1.3.0 起金额也是触发点） | `billsAtListPrice`（`client.js:51`）、`OFFICIAL_PROVIDERS`（`client.js:45`）、`AGENTS.md` → **Invariants** 第 6 条 |
 | 折叠不得卸载组件（hook 数量恒定） | `client.js:729`；提交 `3e70a92`；`AGENTS.md` → **Layout and compatibility guards** |
 | 声明了却没人用的 token 会让线「失踪」 | 提交 `d652196`；新增的静态断言（`test/client.test.mjs`） |
 | 截图价格必须来自线上 | `docs/screenshots/*` 由 `curl http://127.0.0.1:<port>/deepseek-billing-card/data` 的真实表生成；`asOf 2026-10-28` |
-| 不可出现「高峰 + 调休」这类不可达状态 | 用户 m07153 指出。原写作「已改 `docs/screenshots/*`（…之后的工作区）」，但历史里找不到这次更改：那两张图（`makeup-chip.png`、`dark-theme.png`）在 `ba9942f` 里是被**删除**，不是重画；现存 `holiday-banner.png`（`b60a8a2`）与 `english-usd.png`（`659f711`）。2026-10-29 只按提交核对了文件，未复核这两张图的渲染状态 |
+| 不可出现「高峰 + 调休」这类不可达状态 | 用户反馈。原写作「已改 `docs/screenshots/*`（…之后的工作区）」，但历史里找不到这次更改：那两张图（`makeup-chip.png`、`dark-theme.png`）在 `ba9942f` 里是被**删除**，不是重画；现存 `holiday-banner.png`（`b60a8a2`）与 `english-usd.png`（`659f711`）。2026-10-29 只按提交核对了文件，未复核这两张图的渲染状态 |
 
 设计链路的提交顺序（供追溯，重设计本身没有独立提交，搭在 tooltip 那次改动里）：
 
@@ -145,19 +151,92 @@ ba9942f                                              ← 换 banner、统一 ico
 
 ## 6. 无法确认的历史信息，以及需要人工补充的部分
 
-1. **`refactoring-ui` 的上游提交**：仓库 URL 来自我实际执行的命令（已确认），但 skill 文件不带版本号，`s0xdk/refactoring-ui-skill` 的具体 commit **来源待确认**。若要写进第三方声明，需要补一次 `git ls-remote` 或安装器锁文件。
-2. **`banner-design` 的上游提交**：安装器生成的 `skills-lock.json` 已随杂项目录一起删除，**来源待确认**。
-3. **`banner-design` 已不再随仓库分发**：vendored 副本（`840a28e` 引入）已按你的要求删除，改回第三方安装，因此 MIT 的许可证文本义务不再由本仓库承担。若将来又要 vendor，请连 `LICENSE` 一起带进来。
-   安装命令以你给的标准形式记录：`npx skills add https://github.com/nextlevelbuilder/ui-ux-pro-max-skill --skill banner-design`。
-4. **`ui-taste` 的获取地址**：命令用的是 `https://uizze.sh/`（用户指定），它与 `uizze.com` 的关系、以及该站点是否对应一个公开仓库，**来源待确认**。
-5. ~~`docs/screenshots/` 的旧图~~：`makeup-chip.png`、`dark-theme.png` 已在 `ba9942f` 中随 README 精简一并删除，仓库里只剩 `holiday-banner.png` 与 `english-usd.png`。上一版报告误写成「仍在仓库里」，此处更正。
-6. **`--dbc-label-quiet` 的去向**：第 2.2 节记录当时为压暗标签色新增了这个 token，但当前 `client.js` 与 skill 都没有它。它是否就是今天的 `--dbc-ink-3`（skill 记 5.1 / 7.0，与当年的 4.71 不同）**未能确认**；维护者 2026-10-29 回复：本轮无法确认，留待后续复测。2026-10-29 又查了一步：`git log --all -S'dbc-label-quiet' -- client.js` **无输出**，token 名只出现在本文件里，仓库任何提交的 `client.js` 都没写过它——所以「当时新增过这个 token」本身也只有本节这句自述，没有提交可佐证。这一条仍未关闭。
-7. **对比度数值未复测**：2.05:1、3.71:1、4.71:1 与 skill 里的 17.8 / 15.0 等都是当时在渲染结果上实测的，2026-10-29 只核对了它们是否仍只出现在一处（结论：`AGENTS.md` 已不再重复这些数，skill 的 **Contrast** 与 **Failure handling** 表各出现一次），没有重新取色 —— 同属留待后续复测，仍未关闭。
+分三类，性质不同：一类要回到上游仓库去查（来源溯源），一类要回到渲染结果上去量（设计实现），一类**量完了、
+只差一个决定**（6.5 的样式刻度偏离）。三类都**未关闭**，2026-10-29 的整理没有让其中任何一条变成已核实。
 
-### 顺带发现的「文档 vs 代码」不一致
+### 6.1 来源溯源待确认
+
+- **`refactoring-ui` 的上游提交**：仓库 URL 来自实际执行的命令（已确认），但 skill 文件不带版本号，`s0xdk/refactoring-ui-skill` 的具体 commit **来源待确认**。若要写进第三方声明，需要补一次 `git ls-remote` 或安装器锁文件。
+- **`banner-design` 的上游提交**：安装器生成的 `skills-lock.json` 已随杂项目录一起删除，**来源待确认**。
+- **`banner-design` 已不再随仓库分发**：vendored 副本（`840a28e` 引入）已按用户要求删除，改回第三方安装，因此 MIT 的许可证文本义务不再由本仓库承担。若将来又要 vendor，请连 `LICENSE` 一起带进来。安装命令以用户指定的标准形式记录：`npx skills add https://github.com/nextlevelbuilder/ui-ux-pro-max-skill --skill banner-design`。
+- **`ui-taste` 的获取地址**：命令用的是 `https://uizze.sh/`（用户指定），它与 `uizze.com` 的关系、以及该站点是否对应一个公开仓库，**来源待确认**。
+
+### 6.2 设计实现待确认
+
+- **`--dbc-label-quiet` 的去向**：第 2.2 节记录当时为压暗标签色新增了这个 token，但当前 `client.js` 与 skill 都没有它。它是否就是今天的 `--dbc-ink-3`（skill 记 5.1 / 7.0，与当年的 4.71 不同）**未能确认**；维护者答复（2026-10-29）：当时无法确认，留待后续复测。2026-10-29 又查了一步：`git log --all -S'dbc-label-quiet' -- client.js` **无输出**，token 名只出现在本文件里，仓库任何提交的 `client.js` 都没写过它——所以「当时新增过这个 token」本身也只有本节这句自述，没有提交可佐证。这一条仍未关闭。
+- **对比度数值未复测**：2.05:1、3.71:1、4.71:1 与 skill 里的 17.8 / 15.0 等都是当时在渲染结果上实测的，2026-10-29 只核对了它们是否仍只出现在一处（结论：`AGENTS.md` 已不再重复这些数，skill 的 **Contrast** 与 **Failure handling** 表各出现一次），没有重新取色 —— 仍未关闭。2026-10-29 另按 `CARD_CSS` 里的 token 色值复算了一遍：ink-1 17.8 / 15.0、ink-2 7.3 / 10.4、ink-3 5.1 / 7.0（`-surface-2` 上 4.7 / 6.2）、chip 4.7 / 4.6（暗色 7.5 / 7.7）、blue 6.7 / 8.0，与 skill 的 **Contrast** 逐项一致；只有 **2.05:1 复算不出来**（`#157f3c` 在 `#e9f9ef` 上是 4.7:1），这个数的出处仍待查。渲染像素的复测没有做，所以这一条不关闭。
+- **调休 chip 差 0.04**：`.dbc-chip-makeup` 是 `--dbc-ink-3` on `--dbc-surface-3`，按 token 色值浅色主题 **4.46:1**、暗色 5.43:1，低于 skill 声明的 4.5:1 下限。`ink-3` 在 `-surface-2` 上是 4.7，所以 skill 只记了 `-surface-2`。是调 token、换这个 chip 的用色，还是把这一处写成豁免，需要一次决定；本文不改数值，也不把它算作已解决。
+
+### 6.3 已更正的旧说法
+
+- ~~`docs/screenshots/` 的旧图~~：`makeup-chip.png`、`dark-theme.png` 已在 `ba9942f` 中随 README 精简一并删除，仓库里只剩 `holiday-banner.png` 与 `english-usd.png`。上一版报告误写成「仍在仓库里」，此处更正。
+
+### 6.4 顺带发现的「文档 vs 代码」不一致
 
 - **已修**：`client.js` 里气泡上方的注释写着「fixed dark surface in both themes」，自绘气泡早已改用 `background:var(--dbc-surface)` / `color:var(--dbc-ink-1)`；本轮随代码清理改成「气泡继承主题，`--dbc-*` 在两种主题下都能解析」。
 - **已修**：`.dbc-note` 原为 `13px/18px`，`18` 不在当时的 Design scale 行高刻度上；已收敛为 `13px/16px`（提交 `a758bff`），只影响「本该有数字却没有」的那两格，卡片高度减 2px，断言数不变。今天的刻度见 skill 的 **Scale**。
+
+### 6.5 未解决的样式问题（2026-10-29 实测）
+
+这一节和上面两节性质不同：这里没有「查不到」的东西，全部是**在渲染结果上量出来的已知差异**，缺的只是一个决定。
+每一条都做了对照实验——同一份标记，把那一处声明单独归零，再比对几何。量法是：把 `client.js` 的 `CARD_CSS`
+原样抽出来（不手抄），配真实标记，在无头 Chrome 里读 `getBoundingClientRect`；宿主宽度取 232 与 196，
+卡片内容宽 = 宿主宽 − 26（左右各 12px 内边距 + 1px 边框）。脚本是一次性的，没有进仓库，所以下面是**结论**，
+不是可以重跑的命令。
+
+**① 间距偏离刻度 10 处。** skill 的 **Scale → Spacing** 写的是封闭刻度 `4 / 5 / 6 / 8 / 10 / 12`；
+`CARD_CSS` 里 24 条 `gap` / `padding` / `margin` 声明中有 10 条落在这组值之外，取值只用到 `1 / 2 / 3 / 7`：
+
+| 声明 | 刻度外的值 | 归零之后实测的变化 |
+| --- | --- | --- |
+| `.dbc-chip{padding:0 7px}` | 7 | chip 宽 45 → 31（左右各少 7） |
+| `.dbc-tip-row{gap:7px}` | 7 | 气泡里圆点到标签 7 → 0 |
+| `.dbc-tip-rule{margin:7px 0 5px}` | 7（上沿） | 分隔线上方 7 → 0，下方 7 → 2（剩下的 2 来自 `.dbc-tip-note` 自己的 `margin-top`） |
+| `.dbc-amount{gap:3px}` | 3 | `¥` 到数字 3 → 0 |
+| `.dbc-amount-row{gap:3px}` | 3 | **无任何变化**，见 ② |
+| `.dbc-head{gap:2px 8px}` | 2（行距） | 只在换行态可见：head 高 34 → 32 |
+| `.dbc-prices{margin-top:2px}` | 2 | 金额行到价目板 8 → 6 |
+| `.dbc-tip-row{padding:2px 0}` | 2 | 气泡行距 18 → 14 |
+| `.dbc-tip-note{margin-top:2px}` | 2 | 分隔线下方 7 → 5 |
+| `.dbc-price{gap:1px}` | 1 | 价目标签到数值 1 → 0 |
+
+10 条里 9 条真的产生像素，1 条空转。按性质再分一下：`1px` 是贴合不是间隔（`.dbc-price` 的标签↔数值）和发丝线
+（`.dbc-tip-rule` 的 `height:1px`，不在上表里，因为它不是 `gap`/`padding`/`margin`），这类不该按间隔刻度算——
+但 skill 的 **Scale** 里没有这句话，读的人只看到「Closed set」。`7px` 和 `3px` 是真的间隔，改动就会改像素。
+两条路都还没走：把它们收到刻度上（会改渲染），或在 skill 的 **Scale** 里补一句说明性例外。所以「代码符合
+skill 的刻度」这句话，现在不成立。
+
+**② 一条空转的声明：`.dbc-amount-row{gap:3px}`。** 这个 div 只有 1 个子元素（`span.dbc-amount`，见
+`client.js` 的 `amountRow`），flex 的 `gap` 只在相邻项之间插入，单子元素没有间距可插。把 gap 归零，
+232 中文单 chip / 232 中文带调休 / 196 中文带调休三态的每一个几何值都没变。真正把 `¥` 和数字分开的是
+`.dbc-amount{gap:3px}`（归零后 3 → 0）。它留着不会画错，但它会被人当成一条有效间距参与刻度讨论——
+这就是它值得删的理由。**未删。**
+
+**③ `.dbc-head` 的列间距 8px 没有可见效果。** `.dbc-chips` 带 `margin-left:auto`，剩余空间先被自动外边距吃掉。
+把列间距归零（`gap:2px 0`），三态实测完全一致：232 中文单 chip 时 chips 左沿距倒计时右沿仍是 53.75，
+带调休 15.75，196 换行态也相同。8px 唯一的作用在换行判定里——它把这行需要的内容宽提前 8px。行距 2px
+则只在真换行时出现（见 ① 表里 `.dbc-head` 那一行）。
+
+**④ 换行余量（本节唯一还需要决定的实质问题）。** `.dbc-head` 是 `flex-wrap:wrap`，两个子项都是
+`flex:0 0 auto` 加 `white-space:nowrap`，谁都让不出宽度，所以只有「溢出」和「整体换行」两种结局。
+倒计时取最长形态（`距高峰 8天 23:59:59` / `Peak in 8d 23:59:59`）：
+
+| 状态 | 倒计时 | chips | 需要的内容宽（倒计时 + 8 + chips） | 需要的卡片宽（+26） | 232（内容 206） | 196（内容 170） |
+| --- | --- | --- | --- | --- | --- | --- |
+| 中文 · 单 chip | 107.25 | 45 | 160.25 | 186.25 | 余 45.75 | 余 9.75 |
+| 中文 · 带调休 | 107.25 | 83 | 198.25 | 224.25 | **余 7.75** | **换行**（缺 28.25） |
+| 英文 · 单 chip | 108.84 | 42.63 | 159.47 | 185.47 | 余 46.53 | 余 10.53 |
+
+也就是说：196px 的中文带调休**今天就在换行**（head 高 18 → 34，卡片跟着高 16px）；232px 的中文带调休只剩
+**7.75px** 余量，倒计时多一位数、字号或内边距再涨一点就会掉行。英文界面不渲染调休 chip
+（`client.js` 里 `makeupName` 的 `chinese` 条件），所以英文在任何宽度下都不换行，最紧的 196px 还有 10.53px。
+三条路都还没选：接受现状、让 chips 允许收缩（会截断「调休」两个字）、或缩短倒计时文案。
+表里的宽度依赖字体栈（`-apple-system` / `PingFang SC` 那串 `--dbc-font`），换个平台或字号会挪动几像素——
+7.75px 的余量本来就在这个量级里（不到一个 11px 汉字宽），所以这一条按「随时可能掉行」记，不按「还剩多少」记。
+
+**⑤ 这些数值没有任何断言。** `test/client.test.mjs` 的 stylesheet 检查只验证 `var(--dbc-*)` 都有声明，
+没有一条断言间隔、字号、行高或半径。所以上面任何一处改动都不会让测试变红，也不会被测试挡住——这也是
+它们能一路偏离到今天而没人发现的原因。要挡住，得在测试里加断言，或者像本节这样做对照实验并留下记录。
 
 ---
 

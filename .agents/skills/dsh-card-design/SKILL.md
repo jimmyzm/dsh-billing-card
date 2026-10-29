@@ -161,8 +161,9 @@ hairline plus an 11 px footnote in `--dbc-ink-3` for provenance.
 - Move **one step on the scale**, never a half step. If no step fits, the row is wrong, not the scale; a new value has
   to be argued for and recorded.
 - **Weight and colour carry hierarchy, size does not.** De-emphasise with `--dbc-ink-3`, never with a smaller size.
-- **Tint the ground, darken the word.** A tinted chip or strip uses `color-mix(state, ink)` for its text: raw green on
-  its own tint measures 2.05:1 in light mode.
+- **Tint the ground, darken the word.** A tinted chip or strip pairs a state colour with its own `-bg` token — the dark
+  green on the pale green, `--dbc-blue` on its 9 % wash — which is what makes 4.7 green / 4.6 amber / 6.7 blue possible
+  in light mode. Never put a state colour on a tint it was not measured against.
 - **Test the longest translation, not the shortest.** `Cache read` had to become `Cached` to survive 196 px; prefer a
   shorter English word over a smaller font.
 - **Notices replace the amount, they do not sit beside it**: `未配置 API Key` / `读取失败` occupy the amount row at
@@ -216,7 +217,7 @@ hairline plus an 11 px footnote in `--dbc-ink-3` for provenance.
 | --- | --- | --- |
 | A rule exists in the DOM but nothing paints | `var(--dbc-line-2)` — a token nobody declared | the suite fails on an undeclared `--dbc-*`; keep that check |
 | A hairline is "there" but invisible | a border token (`--dbc-line`) used as a divider | 12 % ink mix for dividers |
-| Chip text unreadable in light mode | raw state colour on its own tint (2.05:1) | `color-mix(state 50%, ink)` |
+| Chip text unreadable in light mode | a state colour on a tint it was not measured against | pair it with its own `-bg` token (4.7 green / 4.6 amber) |
 | The card disappears after collapsing the sidebar | `if (!wide) return null` placed above the hooks | the guard sits after every hook; hook count equal in both states |
 | The bubble looks pasted on | the host primitive's fixed dark plate | the card draws its own bubble; never reintroduce the primitive |
 | The arrow points away from its word, or floats beside it | drawn on the far edge, or the trigger's centre fell outside the bubble | arrow on the facing edge; hide it rather than clamp it |
