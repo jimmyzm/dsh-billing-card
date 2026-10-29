@@ -32,7 +32,7 @@ const FETCH_TIMEOUT_MS = 8000;
 const CURRENCIES = ['CNY', 'USD'];
 /** Credential reference the Models page stores the DeepSeek API key under. */
 const API_KEY_REF = 'DEEPSEEK_API_KEY';
-/** The open-platform balance moves slowly; one refresh a minute is plenty. */
+/** The open-platform balance moves slowly; one refresh every 30 seconds is plenty. */
 const BALANCE_REFRESH_MS = 30000;
 
 /**
